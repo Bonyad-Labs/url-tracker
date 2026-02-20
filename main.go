@@ -160,48 +160,26 @@ func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Dur
 	m.Start(ctx)
 }
 
-// runSearchMode executes the interactive search interface loop.
+// runSearchMode executes the interactive search interface using the native SwiftUI manager.
 func runSearchMode(store *storage.Store) {
-	for {
-		query, _, ok := ui.ShowInputDialog("Search Saved URLs", "Enter search query:", "", []string{"Cancel", "Search"})
-		if !ok {
-			return
-		}
+	entries := store.GetEntries()
+	if len(entries) == 0 {
+		ui.ShowNotification("Search Mode", "No saved URLs found")
+		return
+	}
 
-		results := store.SearchEntries(query)
-		if len(results) == 0 {
-			ui.ShowNotification("Search Mode", "No matches found")
-			continue
-		}
+	action, value, ok := ui.ShowSearchManager(entries)
+	if !ok {
+		return
+	}
 
-		var displayStrings []string
-		for _, r := range results {
-			displayStrings = append(displayStrings, fmt.Sprintf("%s - %s", r.Title, r.URL))
-		}
-
-		idx, ok := ui.ShowSearchResults(displayStrings)
-		if !ok {
-			continue
-		}
-
-		selected := results[idx]
-		for {
-			details := fmt.Sprintf("Title: %s\nURL: %s\nCategory: %s\nTags: %s\n\nDescription:\n%s",
-				selected.Title, selected.URL, selected.Category, strings.Join(selected.Tags, ", "), selected.Description)
-
-			action, ok := ui.ShowEntryDetails(details)
-			if !ok || action == "back" {
-				break
-			}
-
-			if action == "copy" {
-				copyToClipboard(selected.URL)
-				ui.ShowNotification("Copy", "URL copied to clipboard")
-			} else if action == "open" {
-				openURLInChrome(selected.URL)
-				return // Exit after opening
-			}
-		}
+	switch action {
+	case "open":
+		openURLInChrome(value)
+		ui.ShowNotification("Success", "Opening in Chrome")
+	case "copy":
+		copyToClipboard(value)
+		ui.ShowNotification("Success", "URL copied to clipboard")
 	}
 }
 

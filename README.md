@@ -6,16 +6,17 @@ A macOS-only background service that monitors Google Chrome tabs and allows you 
 
 - **Background Monitoring**: Automatically detects when you navigate to a new URL in Google Chrome.
 - **Menu Bar Integration**: Access common actions directly from the macOS menu bar.
-- **Native macOS Dialogs**: Promptly asks for a description, category, and tags using native macOS dialogs.
+- **Native macOS Dialogs**: Promptly asks for a description, category, and tags using native AppleScript dialogs.
+- **Premium Whitelist Manager**: a native SwiftUI interface for managing exclusions with real-time search and categorization.
 - **Interactive Search**: Search through your saved URLs using a CLI interface or menu bar shortcut.
-- **Dynamic Whitelisting**: Exclude domains in real-time via the menu bar.
-- **Local Storage**: All data is stored locally on your machine in a JSON file.
+- **Local Storage**: All data is stored locally on your machine in a thread-safe JSON store.
 
 ## Prerequisites
 
-- macOS
+- macOS (Sonoma recommended for best UI)
 - Google Chrome
-- Go 1.18+ (for building)
+- Go 1.18+ (for building the core)
+- Swift (Xcode Command Line Tools) for building native UI components
 
 ## Getting Started
 
@@ -41,17 +42,18 @@ Optional flags:
 - `-storage ~/custom-path.json`: Specify a custom storage location.
 
 #### Search Mode
-Launch the interactive search interface:
+Launch the interactive native search interface:
 ```bash
 ./chrome-url-tracker -search
 ```
-This will prompt you for a search query and display a list of results to open or copy.
+This will open a premium SwiftUI window with live-filtering, rich metadata detail view, and native "Open" and "Copy" actions.
 
 ## Architecture
 
-- **Go**: Core application logic.
-- **AppleScript (osascript)**: Used for all macOS UI interactions and Chrome tab monitoring.
-- **JSON**: Simple, human-readable local storage.
+- **Go**: Core application logic, concurrency management, and storage.
+- **SwiftUI**: Premium native macOS interfaces for complex management tasks.
+- **AppleScript (osascript)**: Lightweight macOS UI interactions and Chrome tab monitoring.
+- **JSON**: Thread-safe, atomic local storage with automatic backup recovery.
 
 ## Project Structure
 

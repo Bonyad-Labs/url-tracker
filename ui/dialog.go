@@ -1,3 +1,6 @@
+// Package ui provides native macOS user interface components.
+// It uses a hybrid approach: lightweight dialogs via AppleScript (osascript)
+// and complex management windows via compiled SwiftUI binaries.
 package ui
 
 import (
@@ -68,7 +71,6 @@ func ShowWhitelistOptions(url string) (choice string, ok bool) {
 }
 
 // ShowWhitelistManager displays the native SwiftUI whitelist manager window.
-// It passes the items as a JSON string and captures the selected item from stdout.
 func ShowWhitelistManager(items []string) (selected string, ok bool) {
 	if len(items) == 0 {
 		ShowNotification("Chrome URL Tracker", "Whitelist is empty")
@@ -80,10 +82,7 @@ func ShowWhitelistManager(items []string) (selected string, ok bool) {
 		return "", false
 	}
 
-	// Call the compiled native manager
-	// Note: We use the absolute path to ensure it's found when running as service
 	cmdPath := "/Users/ahmad/usr/local/bin/whitelist-manager"
-	// Check if local exists first (for dev)
 	if _, err := os.Stat("./whitelist-manager"); err == nil {
 		cmdPath = "./whitelist-manager"
 	}
@@ -91,7 +90,7 @@ func ShowWhitelistManager(items []string) (selected string, ok bool) {
 	uiMu.Lock()
 	defer uiMu.Unlock()
 
-	cmd := exec.Command(cmdPath, string(data))
+	cmd := exec.Command(cmdPath, "--mode", "whitelist", "--data", string(data))
 	out, err := cmd.Output()
 	if err != nil {
 		return "", false
@@ -103,6 +102,41 @@ func ShowWhitelistManager(items []string) (selected string, ok bool) {
 	}
 
 	return output, true
+}
+
+// ShowSearchManager displays the native SwiftUI search manager window.
+// It returns the action (open/copy) and the associated value (URL).
+func ShowSearchManager(entries interface{}) (action string, value string, ok bool) {
+	data, err := json.Marshal(entries)
+	if err != nil {
+		return "", "", false
+	}
+
+	cmdPath := "/Users/ahmad/usr/local/bin/whitelist-manager"
+	if _, err := os.Stat("./whitelist-manager"); err == nil {
+		cmdPath = "./whitelist-manager"
+	}
+
+	uiMu.Lock()
+	defer uiMu.Unlock()
+
+	cmd := exec.Command(cmdPath, "--mode", "search", "--data", string(data))
+	out, err := cmd.Output()
+	if err != nil {
+		return "", "", false
+	}
+
+	output := strings.TrimSpace(string(out))
+	if output == "" {
+		return "", "", false
+	}
+
+	parts := strings.Split(output, "|")
+	if len(parts) == 2 {
+		return strings.ToLower(parts[0]), parts[1], true
+	}
+
+	return "", "", false
 }
 
 // ShowNotification displays a native macOS system notification.
