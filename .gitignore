@@ -1,5 +1,6 @@
 # Binaries
 chrome-url-tracker
+whitelist-manager
 *.exe
 *.exe~
 *.dll

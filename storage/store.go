@@ -149,7 +149,9 @@ func (s *Store) AddEntry(e Entry) error {
 func (s *Store) GetEntries() []Entry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.entries
+	res := make([]Entry, len(s.entries))
+	copy(res, s.entries)
+	return res
 }
 
 // EntryExists checks if a specific URL has already been saved in the store.

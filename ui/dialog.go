@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -65,26 +67,38 @@ func ShowWhitelistOptions(url string) (choice string, ok bool) {
 	return "", false
 }
 
-// ShowWhitelistManager displays the list of currently whitelisted items for removal.
+// ShowWhitelistManager displays the native SwiftUI whitelist manager window.
+// It passes the items as a JSON string and captures the selected item from stdout.
 func ShowWhitelistManager(items []string) (selected string, ok bool) {
 	if len(items) == 0 {
 		ShowNotification("Chrome URL Tracker", "Whitelist is empty")
 		return "", false
 	}
 
-	listStr := "{"
-	for i, r := range items {
-		listStr += quoteForAppleScript(r)
-		if i < len(items)-1 {
-			listStr += ", "
-		}
+	data, err := json.Marshal(items)
+	if err != nil {
+		return "", false
 	}
-	listStr += "}"
 
-	script := fmt.Sprintf(`choose from list %s with title "Whitelist Manager" with prompt "Select an item to remove from whitelist:" OK button name "Remove" cancel button name "Cancel"`, listStr)
-	output, err := runAppleScript(script)
-	output = strings.TrimSpace(output)
-	if err != nil || output == "false" || output == "" {
+	// Call the compiled native manager
+	// Note: We use the absolute path to ensure it's found when running as service
+	cmdPath := "/Users/ahmad/usr/local/bin/whitelist-manager"
+	// Check if local exists first (for dev)
+	if _, err := os.Stat("./whitelist-manager"); err == nil {
+		cmdPath = "./whitelist-manager"
+	}
+
+	uiMu.Lock()
+	defer uiMu.Unlock()
+
+	cmd := exec.Command(cmdPath, string(data))
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false
+	}
+
+	output := strings.TrimSpace(string(out))
+	if output == "" {
 		return "", false
 	}
 

@@ -14,9 +14,13 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "Building native UI components..."
+swiftc ui/manager.swift -o whitelist-manager
+
 echo "Installing binary to $INSTALL_PATH..."
 mkdir -p "$(dirname "$INSTALL_PATH")"
 cp "$BINARY_NAME" "$INSTALL_PATH"
+cp "whitelist-manager" "$(dirname "$INSTALL_PATH")/whitelist-manager"
 
 echo "Updating LaunchAgent..."
 # Ensure directory exists
