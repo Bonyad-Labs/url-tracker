@@ -29,6 +29,7 @@ struct SearchEntry: Identifiable, Codable, Hashable {
 enum AppMode {
     case whitelist
     case search
+    case add
 }
 
 // MARK: - View Models
@@ -37,17 +38,21 @@ class AppViewModel: ObservableObject {
     @Published var mode: AppMode = .whitelist
     @Published var searchText = ""
     
-    // Whitelist Data
+    // Whitelist/Search Data
     @Published var whitelistItems: [WhitelistItem] = []
-    
-    // Search Data
     @Published var searchEntries: [SearchEntry] = []
     @Published var selectedEntry: SearchEntry?
     
-    init(items: [String] = [], entries: [SearchEntry] = [], mode: AppMode = .whitelist) {
+    // Add Mode Data
+    @Published var currentURL: String = ""
+    @Published var currentTitle: String = ""
+    
+    init(items: [String] = [], entries: [SearchEntry] = [], mode: AppMode = .whitelist, url: String = "", title: String = "") {
         self.whitelistItems = items.map { WhitelistItem(value: $0) }
         self.searchEntries = entries
         self.mode = mode
+        self.currentURL = url
+        self.currentTitle = title
     }
     
     // MARK: - Whitelist Logic
@@ -320,18 +325,115 @@ struct SearchDetailView: View {
     }
 }
 
+struct AddView: View {
+    @ObservedObject var viewModel: AppViewModel
+    
+    var domain: String {
+        URL(string: viewModel.currentURL)?.host ?? viewModel.currentURL
+    }
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 8) {
+                Image(systemName: "shield.checkered")
+                    .font(.system(size: 48))
+                    .foregroundColor(.blue)
+                    .padding(.bottom, 8)
+                
+                Text("Add to Whitelist")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text(viewModel.currentTitle.isEmpty ? "New URL Detected" : viewModel.currentTitle)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.top, 8)
+            
+            VStack(spacing: 12) {
+                // Domain Option
+                Button(action: {
+                    print(domain)
+                    NSApplication.shared.terminate(nil)
+                }) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Whitelist Domain")
+                                .font(.headline)
+                            Text(domain)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "globe")
+                            .font(.title2)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+                
+                // URL Option
+                Button(action: {
+                    print(viewModel.currentURL)
+                    NSApplication.shared.terminate(nil)
+                }) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Whitelist Specific URL")
+                                .font(.headline)
+                            Text(viewModel.currentURL)
+                                .font(.caption)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "link")
+                            .font(.title2)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+            }
+            
+            HStack {
+                Button("Cancel") {
+                    NSApplication.shared.terminate(nil)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.secondary)
+                
+                Spacer()
+            }
+        }
+        .padding(32)
+        .frame(width: 400)
+    }
+}
+
 struct MainContentView: View {
     @StateObject var viewModel: AppViewModel
     
     var body: some View {
         Group {
-            if viewModel.mode == .whitelist {
+            switch viewModel.mode {
+            case .whitelist:
                 WhitelistView(viewModel: viewModel)
-            } else {
+            case .search:
                 SearchView(viewModel: viewModel)
+            case .add:
+                AddView(viewModel: viewModel)
             }
         }
-        .frame(minWidth: 600, minHeight: 450)
+        .frame(minWidth: viewModel.mode == .add ? 400 : 600, 
+               minHeight: viewModel.mode == .add ? 350 : 450)
     }
 }
 
@@ -345,12 +447,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let contentView = MainContentView(viewModel: self.viewModel)
 
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 500),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: viewModel.mode == .add ? 400 : 700, height: viewModel.mode == .add ? 350 : 500),
+            styleMask: viewModel.mode == .add ? [.titled, .closable, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
-        window.minSize = NSSize(width: 600, height: 450)
+        
+        if viewModel.mode != .add {
+            window.minSize = NSSize(width: 600, height: 450)
+        }
+        
         window.center()
-        window.title = viewModel.mode == .whitelist ? "Manage Whitelist" : "Search Saved URLs"
+        let titles: [AppMode: String] = [
+            .whitelist: "Manage Whitelist",
+            .search: "Search Saved URLs",
+            .add: "Whitelist URL"
+        ]
+        window.title = titles[viewModel.mode] ?? "Chrome URL Tracker"
         window.contentView = NSHostingView(rootView: contentView)
         window.delegate = self
         window.makeKeyAndOrderFront(nil)
@@ -373,21 +484,33 @@ let args = CommandLine.arguments
 var mode: AppMode = .whitelist
 var items: [String] = []
 var entries: [SearchEntry] = []
+var urlParam: String = ""
+var titleParam: String = ""
 
 // Primitive argument parsing
 for (index, arg) in args.enumerated() {
     if arg == "--mode" && index + 1 < args.count {
-        if args[index+1] == "search" {
-            mode = .search
+        switch args[index+1] {
+        case "search": mode = .search
+        case "add": mode = .add
+        default: mode = .whitelist
         }
     }
+    if arg == "--url" && index + 1 < args.count {
+        urlParam = args[index+1]
+    }
+    if arg == "--title" && index + 1 < args.count {
+        titleParam = args[index+1]
+    }
     if arg == "--data" && index + 1 < args.count {
-        let data = args[index+1].data(using: .utf8)!
+        let dataStr = args[index+1]
+        guard let data = dataStr.data(using: .utf8) else { continue }
+        
         if mode == .whitelist {
             if let decoded = try? JSONDecoder().decode([String].self, from: data) {
                 items = decoded
             }
-        } else {
+        } else if mode == .search {
             if let decoded = try? JSONDecoder().decode([SearchEntry].self, from: data) {
                 entries = decoded
             }
@@ -397,7 +520,7 @@ for (index, arg) in args.enumerated() {
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
-delegate.viewModel = AppViewModel(items: items, entries: entries, mode: mode)
+delegate.viewModel = AppViewModel(items: items, entries: entries, mode: mode, url: urlParam, title: titleParam)
 
 app.delegate = delegate
 app.setActivationPolicy(.regular)

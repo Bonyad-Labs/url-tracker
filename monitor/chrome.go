@@ -42,7 +42,7 @@ func (m *ChromeMonitor) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			info, err := getActiveTab()
+			info, err := GetActiveTab()
 			if err != nil {
 				// Silently skip if Chrome is not running or other errors
 				continue
@@ -56,7 +56,8 @@ func (m *ChromeMonitor) Start(ctx context.Context) {
 	}
 }
 
-func getActiveTab() (TabInfo, error) {
+// GetActiveTab executes an AppleScript to query Chrome's active tab URL and title.
+func GetActiveTab() (TabInfo, error) {
 	// AppleScript to get active tab's URL and title from Google Chrome
 	script := `
 		if application "Google Chrome" is running then

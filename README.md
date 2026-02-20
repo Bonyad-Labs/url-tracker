@@ -6,10 +6,12 @@ A macOS-only background service that monitors Google Chrome tabs and allows you 
 
 - **Background Monitoring**: Automatically detects when you navigate to a new URL in Google Chrome.
 - **Menu Bar Integration**: Access common actions directly from the macOS menu bar.
-- **Native macOS Dialogs**: Promptly asks for a description, category, and tags using native AppleScript dialogs.
-- **Premium Whitelist Manager**: a native SwiftUI interface for managing exclusions with real-time search and categorization.
-- **Interactive Search**: Search through your saved URLs using a CLI interface or menu bar shortcut.
-- **Local Storage**: All data is stored locally on your machine in a thread-safe JSON store.
+- **Unified Premium Manager**: A high-end native SwiftUI interface for all management tasks:
+    - **Search**: Interactive, live-filtering search with rich metadata views.
+    - **Whitelist Manager**: Manage global exclusions with smart categorization.
+    - **Quick Whitelist**: Modern "Domain vs URL" selection dialog for new detections.
+- **Native macOS Dialogs**: Promptly asks for metadata using native AppleScript dialogs for lightweight input.
+- **Local Storage**: All data is stored locally on your machine in a thread-safe, atomic JSON store.
 
 ## Prerequisites
 

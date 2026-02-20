@@ -52,24 +52,6 @@ func ShowForm(title, url string) (description string, tags []string, category st
 	return description, tags, category, true, false
 }
 
-// ShowWhitelistOptions prompts the user to choose between whitelisting a domain or a full URL.
-func ShowWhitelistOptions(url string) (choice string, ok bool) {
-	prompt := fmt.Sprintf("Choose whitelisting option for:\n%s", url)
-	script := fmt.Sprintf(`display dialog %s with title "Whitelist Options" buttons {"Cancel", "Whitelist URL", "Whitelist Domain"} default button "Whitelist Domain"`, quoteForAppleScript(prompt))
-	output, err := runAppleScript(script)
-	if err != nil {
-		return "", false
-	}
-
-	if strings.Contains(output, "button returned:Whitelist Domain") {
-		return "domain", true
-	}
-	if strings.Contains(output, "button returned:Whitelist URL") {
-		return "url", true
-	}
-	return "", false
-}
-
 // ShowWhitelistManager displays the native SwiftUI whitelist manager window.
 func ShowWhitelistManager(items []string) (selected string, ok bool) {
 	if len(items) == 0 {
@@ -137,6 +119,31 @@ func ShowSearchManager(entries interface{}) (action string, value string, ok boo
 	}
 
 	return "", "", false
+}
+
+// ShowAddWhitelistDialog displays a native SwiftUI dialog to choose between
+// whitelisting the domain or the specific URL.
+func ShowAddWhitelistDialog(url, title string) (selection string, ok bool) {
+	cmdPath := "/Users/ahmad/usr/local/bin/whitelist-manager"
+	if _, err := os.Stat("./whitelist-manager"); err == nil {
+		cmdPath = "./whitelist-manager"
+	}
+
+	uiMu.Lock()
+	defer uiMu.Unlock()
+
+	cmd := exec.Command(cmdPath, "--mode", "add", "--url", url, "--title", title)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false
+	}
+
+	output := strings.TrimSpace(string(out))
+	if output == "" {
+		return "", false
+	}
+
+	return output, true
 }
 
 // ShowNotification displays a native macOS system notification.

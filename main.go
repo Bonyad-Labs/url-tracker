@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -52,6 +51,22 @@ func main() {
 	// Start menu bar (blocks until exit)
 	ui.StartMenu(ui.MenuHandlers{
 		OnWhitelist: func() {
+			// Try to get active tab to provide modern context-aware whitelisting
+			tab, err := monitor.GetActiveTab()
+			if err == nil {
+				selection, ok := ui.ShowAddWhitelistDialog(tab.URL, tab.Title)
+				if ok {
+					err := store.AddExcludedDomain(selection)
+					if err != nil {
+						ui.ShowNotification("Error", fmt.Sprintf("Failed to whitelist: %v", err))
+					} else {
+						ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", selection))
+					}
+				}
+				return
+			}
+
+			// Fallback: Manual input if no active tab found
 			domain, _, ok := ui.ShowInputDialog("Add to Whitelist", "Enter domain to exclude (e.g. youtube.com):", "", []string{"Cancel", "OK"})
 			if ok && domain != "" {
 				err := store.AddExcludedDomain(domain)
@@ -116,20 +131,13 @@ func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Dur
 		// Show sequential dialogs
 		desc, tags, cat, saved, whitelist := ui.ShowForm("New URL Detected", tab.URL)
 		if whitelist {
-			choice, ok := ui.ShowWhitelistOptions(tab.URL)
+			selection, ok := ui.ShowAddWhitelistDialog(tab.URL, tab.Title)
 			if ok {
-				toExclude := tab.URL
-				if choice == "domain" {
-					u, err := url.Parse(tab.URL)
-					if err == nil {
-						toExclude = u.Host
-					}
-				}
-				err := store.AddExcludedDomain(toExclude)
+				err := store.AddExcludedDomain(selection)
 				if err != nil {
 					ui.ShowNotification("Error", fmt.Sprintf("Failed to whitelist: %v", err))
 				} else {
-					ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", toExclude))
+					ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", selection))
 					seenUrls[tab.URL] = true
 				}
 			}
