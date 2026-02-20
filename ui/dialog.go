@@ -83,11 +83,12 @@ func ShowWhitelistManager(items []string) (selected string, ok bool) {
 
 	script := fmt.Sprintf(`choose from list %s with title "Whitelist Manager" with prompt "Select an item to remove from whitelist:" OK button name "Remove" cancel button name "Cancel"`, listStr)
 	output, err := runAppleScript(script)
-	if err != nil || output == "false" || strings.TrimSpace(output) == "" {
+	output = strings.TrimSpace(output)
+	if err != nil || output == "false" || output == "" {
 		return "", false
 	}
 
-	return strings.TrimSpace(output), true
+	return output, true
 }
 
 // ShowNotification displays a native macOS system notification.
@@ -121,11 +122,12 @@ func ShowSearchResults(results []string) (int, bool) {
 
 	script := fmt.Sprintf(`choose from list %s with title "Chrome URL Tracker" with prompt "Select an entry to view details:"`, listStr)
 	output, err := runAppleScript(script)
-	if err != nil || output == "false" {
+	output = strings.TrimSpace(output)
+	if err != nil || output == "false" || output == "" {
 		return -1, false
 	}
 
-	selected := strings.TrimSpace(output)
+	selected := output
 	for i, r := range results {
 		if r == selected {
 			return i, true
