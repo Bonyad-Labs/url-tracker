@@ -7,9 +7,15 @@ import AppKit
 
 // MARK: - Data Models
 
-struct WhitelistItem: Identifiable {
+struct WhitelistItem: Identifiable, Codable {
     let id = UUID()
     let value: String
+    let type: String      // "domain" or "url"
+    let timestamp: Int64  // Unix timestamp
+    
+    enum CodingKeys: String, CodingKey {
+        case value, type, timestamp
+    }
 }
 
 struct SearchEntry: Identifiable, Codable, Hashable {
@@ -53,8 +59,8 @@ class AppViewModel: ObservableObject {
     @Published var saveCategory: String = "Research"
     @Published var saveTags: String = ""
     
-    init(items: [String] = [], entries: [SearchEntry] = [], mode: AppMode = .whitelist, url: String = "", title: String = "") {
-        self.whitelistItems = items.map { WhitelistItem(value: $0) }
+    init(items: [WhitelistItem] = [], entries: [SearchEntry] = [], mode: AppMode = .whitelist, url: String = "", title: String = "") {
+        self.whitelistItems = items
         self.searchEntries = entries
         self.mode = mode
         self.currentURL = url
@@ -67,11 +73,11 @@ class AppViewModel: ObservableObject {
     }
     
     var filteredDomains: [WhitelistItem] {
-        whitelistItems.filter { !isURL($0.value) && (searchText.isEmpty || $0.value.lowercased().contains(searchText.lowercased())) }
+        whitelistItems.filter { $0.type == "domain" && (searchText.isEmpty || $0.value.lowercased().contains(searchText.lowercased())) }
     }
     
     var filteredWhitelistedURLs: [WhitelistItem] {
-        whitelistItems.filter { isURL($0.value) && (searchText.isEmpty || $0.value.lowercased().contains(searchText.lowercased())) }
+        whitelistItems.filter { $0.type == "url" && (searchText.isEmpty || $0.value.lowercased().contains(searchText.lowercased())) }
     }
     
     // MARK: - Search Logic
@@ -95,29 +101,57 @@ class AppViewModel: ObservableObject {
 struct WhitelistRow: View {
     let item: WhitelistItem
     
+    var dateString: String {
+        let date = Date(timeIntervalSince1970: TimeInterval(item.timestamp))
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+    
     var body: some View {
-        HStack {
-            Image(systemName: item.value.contains("://") ? "link" : "globe")
-                .foregroundColor(.blue)
-                .frame(width: 20)
+        HStack(spacing: 0) {
+            // Type
+            HStack {
+                Image(systemName: item.type == "url" ? "link" : "globe")
+                    .foregroundColor(.blue)
+                Text(item.type.capitalized)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(width: 80, alignment: .leading)
+            
+            // Value
             Text(item.value)
                 .font(.system(.body, design: .monospaced))
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+            
+            // Date
+            Text(dateString)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 80, alignment: .leading)
+            
+            // Action
             Button(action: {
                 print(item.value) // Output to Go via stdout
                 NSApplication.shared.terminate(nil)
             }) {
-                Text("Remove")
+                Image(systemName: "trash")
                     .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
             }
-            .buttonStyle(.bordered)
-            .tint(.red)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .foregroundColor(.red.opacity(0.8))
+            .onHover { inside in
+                if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+            }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
     }
 }
 
@@ -161,30 +195,62 @@ struct WhitelistView: View {
         VStack(spacing: 0) {
             header
             
-            TextField("Search...", text: $viewModel.searchText)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-            
-            List {
-                if !viewModel.filteredDomains.isEmpty {
-                    Section(header: Text("Domains").font(.caption).fontWeight(.bold)) {
-                        ForEach(viewModel.filteredDomains) { item in
-                            WhitelistRow(item: item)
-                        }
-                    }
-                }
+            VStack(spacing: 0) {
+                TextField("Search whitelisted items...", text: $viewModel.searchText)
+                    .textFieldStyle(.plain)
+                    .padding(12)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(8)
+                    .padding()
                 
-                if !viewModel.filteredWhitelistedURLs.isEmpty {
-                    Section(header: Text("Specific URLs").font(.caption).fontWeight(.bold)) {
-                        ForEach(viewModel.filteredWhitelistedURLs) { item in
-                            WhitelistRow(item: item)
+                // Table Header
+                HStack(spacing: 0) {
+                    Text("TYPE")
+                        .frame(width: 80, alignment: .leading)
+                    Text("ENTRY")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 8)
+                    Text("ADDED ON")
+                        .frame(width: 80, alignment: .leading)
+                    Text("")
+                        .frame(width: 40)
+                }
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.1))
+                
+                List {
+                    if !viewModel.filteredDomains.isEmpty {
+                        Section(header: Text("Domains").font(.caption).fontWeight(.bold).foregroundColor(.blue)) {
+                            ForEach(viewModel.filteredDomains) { item in
+                                WhitelistRow(item: item)
+                                    .listRowBackground(Color.clear)
+                            }
                         }
                     }
+                    
+                    if !viewModel.filteredWhitelistedURLs.isEmpty {
+                        Section(header: Text("Specific URLs").font(.caption).fontWeight(.bold).foregroundColor(.blue)) {
+                            ForEach(viewModel.filteredWhitelistedURLs) { item in
+                                WhitelistRow(item: item)
+                                    .listRowBackground(Color.clear)
+                            }
+                        }
+                    }
+                    
+                    if viewModel.whitelistItems.isEmpty {
+                        Text("No whitelisted items yet.")
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 40)
+                    }
                 }
+                .listStyle(InsetListStyle())
             }
-            .listStyle(InsetListStyle())
         }
+        .background(Color.black.opacity(0.02))
     }
     
     var header: some View {
@@ -624,7 +690,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
 let args = CommandLine.arguments
 var mode: AppMode = .whitelist
-var items: [String] = []
+var whitelistItems: [WhitelistItem] = []
 var entries: [SearchEntry] = []
 var urlParam: String = ""
 var titleParam: String = ""
@@ -650,8 +716,8 @@ for (index, arg) in args.enumerated() {
         guard let data = dataStr.data(using: .utf8) else { continue }
         
         if mode == .whitelist {
-            if let decoded = try? JSONDecoder().decode([String].self, from: data) {
-                items = decoded
+            if let decoded = try? JSONDecoder().decode([WhitelistItem].self, from: data) {
+                whitelistItems = decoded
             }
         } else if mode == .search {
             if let decoded = try? JSONDecoder().decode([SearchEntry].self, from: data) {
@@ -663,7 +729,7 @@ for (index, arg) in args.enumerated() {
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
-delegate.viewModel = AppViewModel(items: items, entries: entries, mode: mode, url: urlParam, title: titleParam)
+delegate.viewModel = AppViewModel(items: whitelistItems, entries: entries, mode: mode, url: urlParam, title: titleParam)
 
 app.delegate = delegate
 app.setActivationPolicy(.regular)

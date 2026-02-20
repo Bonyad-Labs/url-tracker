@@ -12,6 +12,19 @@ import (
 	"time"
 )
 
+func getDefaultExclusions() []WhitelistEntry {
+	defaults := []string{"localhost", "127.0.0.1", "accounts.google.com", "login.microsoftonline.com"}
+	res := make([]WhitelistEntry, len(defaults))
+	for i, d := range defaults {
+		res[i] = WhitelistEntry{
+			Value:     d,
+			Type:      "domain",
+			Timestamp: time.Now().Unix(),
+		}
+	}
+	return res
+}
+
 // Entry represents a single saved URL with its associated metadata.
 type Entry struct {
 	URL         string   `json:"url"`
@@ -22,18 +35,25 @@ type Entry struct {
 	Timestamp   int64    `json:"timestamp"` // Unix timestamp of when the entry was saved
 }
 
+// WhitelistEntry represents a domain or URL exclusion with metadata.
+type WhitelistEntry struct {
+	Value     string `json:"value"`
+	Type      string `json:"type"`      // "domain" or "url"
+	Timestamp int64  `json:"timestamp"` // Unix timestamp of when it was added
+}
+
 // Store manages the collection of saved URLs and whitelisted domains.
 // It is thread-safe and safe for concurrent use by multiple goroutines.
 type Store struct {
 	path            string
 	entries         []Entry
-	excludedDomains []string
+	excludedDomains []WhitelistEntry
 	mu              sync.RWMutex
 }
 
 type storageData struct {
-	Entries         []Entry  `json:"entries"`
-	ExcludedDomains []string `json:"excluded_domains"`
+	Entries         []Entry          `json:"entries"`
+	ExcludedDomains []WhitelistEntry `json:"excluded_domains"`
 }
 
 // NewStore initializes a new Store at the given path.
@@ -56,7 +76,7 @@ func NewStore(path string) (*Store, error) {
 		_ = os.Rename(path, backupPath)
 		// Initialize empty if load failed (after backup attempt)
 		s.entries = []Entry{}
-		s.excludedDomains = []string{"localhost", "127.0.0.1", "accounts.google.com", "login.microsoftonline.com"}
+		s.excludedDomains = getDefaultExclusions()
 		_ = s.Save()
 		return s, fmt.Errorf("storage corrupted, backup created at %s, reset to empty", backupPath)
 	}
@@ -64,7 +84,7 @@ func NewStore(path string) (*Store, error) {
 	if os.IsNotExist(err) {
 		// Initialize empty file
 		s.entries = []Entry{}
-		s.excludedDomains = []string{"localhost", "127.0.0.1", "accounts.google.com", "login.microsoftonline.com"}
+		s.excludedDomains = getDefaultExclusions()
 		err = s.Save()
 		if err != nil {
 			return nil, err
@@ -73,7 +93,7 @@ func NewStore(path string) (*Store, error) {
 
 	// Ensure defaults if empty
 	if len(s.excludedDomains) == 0 {
-		s.excludedDomains = []string{"localhost", "127.0.0.1", "accounts.google.com", "login.microsoftonline.com"}
+		s.excludedDomains = getDefaultExclusions()
 		_ = s.Save()
 	}
 
@@ -92,13 +112,42 @@ func (s *Store) loadUnlocked() error {
 		return err
 	}
 
-	var sd storageData
+	// We use a temporary struct to detect the format of excluded_domains
+	var sd struct {
+		Entries         []Entry           `json:"entries"`
+		ExcludedDomains []json.RawMessage `json:"excluded_domains"`
+	}
+
 	if err := json.Unmarshal(data, &sd); err != nil {
 		return err
 	}
 
 	s.entries = sd.Entries
-	s.excludedDomains = sd.ExcludedDomains
+	s.excludedDomains = []WhitelistEntry{}
+
+	for _, raw := range sd.ExcludedDomains {
+		// Attempt to parse as new structured entry
+		var entry WhitelistEntry
+		if err := json.Unmarshal(raw, &entry); err == nil && entry.Value != "" {
+			s.excludedDomains = append(s.excludedDomains, entry)
+			continue
+		}
+
+		// Fallback: Attempt to parse as legacy string
+		var legacyValue string
+		if err := json.Unmarshal(raw, &legacyValue); err == nil {
+			entryType := "domain"
+			if strings.Contains(legacyValue, "://") {
+				entryType = "url"
+			}
+			s.excludedDomains = append(s.excludedDomains, WhitelistEntry{
+				Value:     legacyValue,
+				Type:      entryType,
+				Timestamp: time.Now().Unix(),
+			})
+		}
+	}
+
 	return nil
 }
 
@@ -166,12 +215,11 @@ func (s *Store) EntryExists(url string) bool {
 	return false
 }
 
-// GetExcludedDomains returns a copy of all whitelisted domains and URLs.
-func (s *Store) GetExcludedDomains() []string {
+// GetExcludedDomains returns a copy of all whitelisted entries.
+func (s *Store) GetExcludedDomains() []WhitelistEntry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	// Return a copy to avoid external mutation
-	res := make([]string, len(s.excludedDomains))
+	res := make([]WhitelistEntry, len(s.excludedDomains))
 	copy(res, s.excludedDomains)
 	return res
 }
@@ -205,11 +253,21 @@ func (s *Store) AddExcludedDomain(domain string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, d := range s.excludedDomains {
-		if d == domain {
+		if d.Value == domain {
 			return nil
 		}
 	}
-	s.excludedDomains = append(s.excludedDomains, domain)
+
+	entryType := "domain"
+	if strings.Contains(domain, "://") {
+		entryType = "url"
+	}
+
+	s.excludedDomains = append(s.excludedDomains, WhitelistEntry{
+		Value:     domain,
+		Type:      entryType,
+		Timestamp: time.Now().Unix(),
+	})
 	return s.saveUnlocked()
 }
 
@@ -219,10 +277,10 @@ func (s *Store) RemoveExcludedDomain(domain string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	newDomains := []string{}
+	newDomains := []WhitelistEntry{}
 	found := false
 	for _, d := range s.excludedDomains {
-		if d == domain {
+		if d.Value == domain {
 			found = true
 			continue
 		}
@@ -243,8 +301,8 @@ func (s *Store) IsExcluded(url string) bool {
 	url = strings.ToLower(url)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, domain := range s.excludedDomains {
-		if strings.Contains(url, domain) {
+	for _, entry := range s.excludedDomains {
+		if strings.Contains(url, entry.Value) {
 			return true
 		}
 	}

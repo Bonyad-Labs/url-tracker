@@ -17,12 +17,7 @@ import (
 var uiMu sync.Mutex
 
 // ShowWhitelistManager displays the native SwiftUI whitelist manager window.
-func ShowWhitelistManager(items []string) (selected string, ok bool) {
-	if len(items) == 0 {
-		ShowNotification("Chrome URL Tracker", "Whitelist is empty")
-		return "", false
-	}
-
+func ShowWhitelistManager(items interface{}) (selected string, ok bool) {
 	data, err := json.Marshal(items)
 	if err != nil {
 		return "", false
