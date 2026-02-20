@@ -30,6 +30,7 @@ enum AppMode {
     case whitelist
     case search
     case add
+    case save
 }
 
 // MARK: - View Models
@@ -46,6 +47,11 @@ class AppViewModel: ObservableObject {
     // Add Mode Data
     @Published var currentURL: String = ""
     @Published var currentTitle: String = ""
+    
+    // Save Mode Data
+    @Published var saveDescription: String = ""
+    @Published var saveCategory: String = "Research"
+    @Published var saveTags: String = ""
     
     init(items: [String] = [], entries: [SearchEntry] = [], mode: AppMode = .whitelist, url: String = "", title: String = "") {
         self.whitelistItems = items.map { WhitelistItem(value: $0) }
@@ -418,6 +424,137 @@ struct AddView: View {
     }
 }
 
+struct SaveView: View {
+    @ObservedObject var viewModel: AppViewModel
+    @FocusState private var focusedField: Field?
+    
+    enum Field {
+        case description, category, tags
+    }
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            // Header
+            VStack(spacing: 8) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 40))
+                    .foregroundColor(.blue)
+                
+                Text("Save New URL")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text(viewModel.currentTitle.isEmpty ? viewModel.currentURL : viewModel.currentTitle)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.top, 8)
+            
+            // Form
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Description")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                    TextField("What is this page about?", text: $viewModel.saveDescription)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(8)
+                        .focused($focusedField, equals: .description)
+                }
+                
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Category")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+                        TextField("Research, Social...", text: $viewModel.saveCategory)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(8)
+                            .focused($focusedField, equals: .category)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Tags")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+                        TextField("tag1, tag2...", text: $viewModel.saveTags)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(8)
+                            .focused($focusedField, equals: .tags)
+                    }
+                }
+            }
+            
+            // Actions
+            VStack(spacing: 12) {
+                Button(action: {
+                    let response = [
+                        "action": "save",
+                        "description": viewModel.saveDescription,
+                        "category": viewModel.saveCategory,
+                        "tags": viewModel.saveTags
+                    ]
+                    if let jsonData = try? JSONEncoder().encode(response),
+                       let jsonString = String(data: jsonData, encoding: .utf8) {
+                        print(jsonString)
+                        NSApplication.shared.terminate(nil)
+                    }
+                }) {
+                    Text("Save Entry")
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.return, modifiers: [])
+                
+                HStack(spacing: 12) {
+                    Button(action: {
+                        print("{\"action\": \"whitelist\"}")
+                        NSApplication.shared.terminate(nil)
+                    }) {
+                        Text("Whitelist...")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button(action: {
+                        NSApplication.shared.terminate(nil)
+                    }) {
+                        Text("Skip")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(32)
+        .frame(width: 450)
+        .onAppear {
+            focusedField = .description
+        }
+    }
+}
+
 struct MainContentView: View {
     @StateObject var viewModel: AppViewModel
     
@@ -430,10 +567,12 @@ struct MainContentView: View {
                 SearchView(viewModel: viewModel)
             case .add:
                 AddView(viewModel: viewModel)
+            case .save:
+                SaveView(viewModel: viewModel)
             }
         }
-        .frame(minWidth: viewModel.mode == .add ? 400 : 600, 
-               minHeight: viewModel.mode == .add ? 350 : 450)
+        .frame(minWidth: (viewModel.mode == .add || viewModel.mode == .save) ? 400 : 600, 
+               minHeight: (viewModel.mode == .add || viewModel.mode == .save) ? 350 : 450)
     }
 }
 
@@ -447,11 +586,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let contentView = MainContentView(viewModel: self.viewModel)
 
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: viewModel.mode == .add ? 400 : 700, height: viewModel.mode == .add ? 350 : 500),
-            styleMask: viewModel.mode == .add ? [.titled, .closable, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, 
+                               width: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : 700, 
+                               height: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : 500),
+            styleMask: (viewModel.mode == .add || viewModel.mode == .save) ? [.titled, .closable, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
         
-        if viewModel.mode != .add {
+        if viewModel.mode != .add && viewModel.mode != .save {
             window.minSize = NSSize(width: 600, height: 450)
         }
         
@@ -459,7 +600,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let titles: [AppMode: String] = [
             .whitelist: "Manage Whitelist",
             .search: "Search Saved URLs",
-            .add: "Whitelist URL"
+            .add: "Whitelist URL",
+            .save: "Save URL"
         ]
         window.title = titles[viewModel.mode] ?? "Chrome URL Tracker"
         window.contentView = NSHostingView(rootView: contentView)
@@ -493,6 +635,7 @@ for (index, arg) in args.enumerated() {
         switch args[index+1] {
         case "search": mode = .search
         case "add": mode = .add
+        case "save": mode = .save
         default: mode = .whitelist
         }
     }

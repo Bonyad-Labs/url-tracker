@@ -16,42 +16,6 @@ import (
 // This prevents multiple dialogs from overlapping and causing diagnostic errors.
 var uiMu sync.Mutex
 
-// ShowForm orchestrates a sequence of AppleScript dialogs to capture URL metadata.
-// It bypasses the 3-button limit of AppleScript by chaining calls.
-// Returns description, tags, category, and flags for save/whitelist actions.
-func ShowForm(title, url string) (description string, tags []string, category string, saved bool, whitelist bool) {
-	// Dialog 1: Description + Whitelist button
-	descResult, button, ok := ShowInputDialog("Chrome URL Tracker", fmt.Sprintf("URL: %s\n\nEnter Description:", url), "", []string{"Cancel", "Whitelist", "OK"})
-	if !ok {
-		return "", nil, "", false, false
-	}
-	if button == "Whitelist" {
-		return "", nil, "", false, true
-	}
-	description = descResult
-
-	// Dialog 2: Category
-	catResult, _, ok := ShowInputDialog("Chrome URL Tracker", "Enter Category (e.g., Research, Social, Work):", "Research", []string{"Cancel", "OK"})
-	if !ok {
-		return description, nil, "", false, false
-	}
-	category = catResult
-
-	// Dialog 4: Tags
-	tagsResult, _, ok := ShowInputDialog("Chrome URL Tracker", "Enter Tags (comma separated):", "", []string{"Cancel", "OK"})
-	if !ok {
-		return description, nil, category, false, false
-	}
-	if tagsResult != "" {
-		parts := strings.Split(tagsResult, ",")
-		for _, p := range parts {
-			tags = append(tags, strings.TrimSpace(p))
-		}
-	}
-
-	return description, tags, category, true, false
-}
-
 // ShowWhitelistManager displays the native SwiftUI whitelist manager window.
 func ShowWhitelistManager(items []string) (selected string, ok bool) {
 	if len(items) == 0 {
@@ -144,6 +108,62 @@ func ShowAddWhitelistDialog(url, title string) (selection string, ok bool) {
 	}
 
 	return output, true
+}
+
+// ShowSaveDialog displays a native SwiftUI form to capture URL metadata.
+// It returns the metadata fields and flags for save/whitelist actions.
+func ShowSaveDialog(url, title string) (description string, tags []string, category string, saved bool, whitelist bool) {
+	cmdPath := "/Users/ahmad/usr/local/bin/whitelist-manager"
+	if _, err := os.Stat("./whitelist-manager"); err == nil {
+		cmdPath = "./whitelist-manager"
+	}
+
+	uiMu.Lock()
+	defer uiMu.Unlock()
+
+	cmd := exec.Command(cmdPath, "--mode", "save", "--url", url, "--title", title)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", nil, "", false, false
+	}
+
+	output := strings.TrimSpace(string(out))
+	if output == "" {
+		return "", nil, "", false, false
+	}
+
+	// Parse JSON output
+	var res struct {
+		Action      string `json:"action"`
+		Description string `json:"description"`
+		Category    string `json:"category"`
+		Tags        string `json:"tags"`
+	}
+
+	if err := json.Unmarshal([]byte(output), &res); err != nil {
+		// Fallback for simple actions if JSON fails (though it shouldn't)
+		if strings.Contains(output, "whitelist") {
+			return "", nil, "", false, true
+		}
+		return "", nil, "", false, false
+	}
+
+	if res.Action == "whitelist" {
+		return "", nil, "", false, true
+	}
+
+	if res.Action == "save" {
+		var tagList []string
+		if res.Tags != "" {
+			parts := strings.Split(res.Tags, ",")
+			for _, p := range parts {
+				tagList = append(tagList, strings.TrimSpace(p))
+			}
+		}
+		return res.Description, tagList, res.Category, true, false
+	}
+
+	return "", nil, "", false, false
 }
 
 // ShowNotification displays a native macOS system notification.

@@ -8,9 +8,10 @@ A macOS-only background service that monitors Google Chrome tabs and allows you 
 - **Menu Bar Integration**: Access common actions directly from the macOS menu bar.
 - **Unified Premium Manager**: A high-end native SwiftUI interface for all management tasks:
     - **Search**: Interactive, live-filtering search with rich metadata views.
+    - **Save Entry**: Premium single-window form for capturing descriptions, categories, and tags.
     - **Whitelist Manager**: Manage global exclusions with smart categorization.
     - **Quick Whitelist**: Modern "Domain vs URL" selection dialog for new detections.
-- **Native macOS Dialogs**: Promptly asks for metadata using native AppleScript dialogs for lightweight input.
+- **Native Notifications**: Real-time macOS system notifications for all background actions.
 - **Local Storage**: All data is stored locally on your machine in a thread-safe, atomic JSON store.
 
 ## Prerequisites
@@ -35,7 +36,9 @@ A macOS-only background service that monitors Google Chrome tabs and allows you 
 ### Usage
 
 #### Monitor Mode (Default)
-The service runs in the background. You can also start it manually for testing:
+The service runs in the background, monitoring your Chrome tabs. When a new URL is detected, it presents a **unified native SwiftUI form** to quickly save metadata or whitelist the domain.
+
+To run manually for testing:
 ```bash
 ./chrome-url-tracker
 ```
@@ -53,8 +56,8 @@ This will open a premium SwiftUI window with live-filtering, rich metadata detai
 ## Architecture
 
 - **Go**: Core application logic, concurrency management, and storage.
-- **SwiftUI**: Premium native macOS interfaces for complex management tasks.
-- **AppleScript (osascript)**: Lightweight macOS UI interactions and Chrome tab monitoring.
+- **SwiftUI**: Premium native macOS interfaces for all primary user interactions (Search, Save, Whitelist).
+- **AppleScript (osascript)**: Lightweight hooks for Chrome tab monitoring and system notifications.
 - **JSON**: Thread-safe, atomic local storage with automatic backup recovery.
 
 ## Project Structure

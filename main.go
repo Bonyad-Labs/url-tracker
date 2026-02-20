@@ -128,8 +128,8 @@ func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Dur
 			return
 		}
 
-		// Show sequential dialogs
-		desc, tags, cat, saved, whitelist := ui.ShowForm("New URL Detected", tab.URL)
+		// Show native modern save dialog
+		desc, tags, cat, saved, whitelist := ui.ShowSaveDialog(tab.URL, tab.Title)
 		if whitelist {
 			selection, ok := ui.ShowAddWhitelistDialog(tab.URL, tab.Title)
 			if ok {
