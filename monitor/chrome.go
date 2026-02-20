@@ -77,7 +77,11 @@ func GetActiveTab() (TabInfo, error) {
 		return TabInfo{}, err
 	}
 
-	result := strings.TrimSpace(string(out))
+	return parseActiveTab(string(out))
+}
+
+func parseActiveTab(output string) (TabInfo, error) {
+	result := strings.TrimSpace(output)
 	if result == "" {
 		return TabInfo{}, fmt.Errorf("chrome not running or no tabs open")
 	}

@@ -12,7 +12,7 @@ A macOS-only background service that monitors Google Chrome tabs and allows you 
     - **Whitelist Manager**: Professional tabular view with type icons, persistent metadata (Date Added), and segmented toggles (All/Domains/URLs).
     - **Quick Whitelist**: Modern "Domain vs URL" selection dialog for new detections.
 - **Native Notifications**: Real-time macOS system notifications for all background actions.
-- **Local Storage**: All data is stored locally on your machine in a thread-safe, atomic JSON store.
+- **Local Storage**: All data is stored locally in a high-performance **SQLite** database in the standard macOS `Application Support` directory.
 
 ## Prerequisites
 
@@ -44,28 +44,41 @@ To run manually for testing:
 ```
 Optional flags:
 - `-interval 1000`: Set polling interval in milliseconds (default 1000ms).
-- `-storage ~/custom-path.json`: Specify a custom storage location.
+- `-storage ~/custom-path.db`: Specify a custom SQLite database location (default: `~/Library/Application Support/chrome-url-tracker/chrome-urls.db`).
 
-#### Search Mode
 Launch the interactive native search interface:
 ```bash
 ./chrome-url-tracker -search
 ```
 This will open a premium SwiftUI window with live-filtering, rich metadata detail view, and native "Open" and "Copy" actions.
 
+### Testing
+
+The project includes an automated unit test suite covering storage, monitor parsing, and UI utilities.
+
+Run all tests:
+```bash
+go test -v ./...
+```
+
+Check coverage (Storage package):
+```bash
+go test -cover ./storage
+```
+
 ## Architecture
 
-- **Go**: Core application logic, concurrency management, and storage.
+- **Go**: Core application logic, concurrency management, and storage orchestration.
+- **SQLite**: Local relational storage via pure Go driver (`modernc.org/sqlite`) for high-performance searching and filtering.
 - **SwiftUI**: Premium native macOS interfaces for all primary user interactions (Search, Save, Whitelist).
 - **AppleScript (osascript)**: Lightweight hooks for Chrome tab monitoring and system notifications.
-- **JSON**: Thread-safe, atomic local storage with automatic backup recovery.
 
 ## Project Structure
 
-- `main.go`: Application coordination and mode selection.
-- `monitor/`: Chrome tab polling logic.
-- `storage/`: JSON data persistence.
-- `ui/`: macOS dialog orchestration.
+- `main.go`: Application coordination, mode selection, and database lifecycle management.
+- `monitor/`: Chrome tab polling and active tab detection logic.
+- `storage/`: SQLite storage layer with schema management and data persistence.
+- `ui/`: macOS dialog orchestration and native SwiftUI bridge.
 - `update.sh`: Build and LaunchAgent management script.
 
 ## Future Improvements

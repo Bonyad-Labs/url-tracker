@@ -26,13 +26,14 @@ var isSearching int32
 func main() {
 	searchFlag := flag.Bool("search", false, "Run in search mode one-shot")
 	intervalFlag := flag.Int("interval", 1000, "Polling interval in milliseconds")
-	storageFlag := flag.String("storage", "~/Documents/chrome-urls.json", "Path to storage JSON file")
+	storageFlag := flag.String("storage", "", "Path to SQLite database (default: ~/Library/Application Support/chrome-url-tracker/chrome-urls.db)")
 	flag.Parse()
 
 	store, err := storage.NewStore(*storageFlag)
 	if err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
+	defer store.Close()
 
 	if *searchFlag {
 		runSearchMode(store)
