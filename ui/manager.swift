@@ -47,6 +47,14 @@ enum WhitelistFilter: String, CaseIterable, Identifiable {
     var id: String { self.rawValue }
 }
 
+enum SidebarSelection: Hashable {
+    case all
+    case recentlyAdded
+    case untagged
+    case category(String)
+    case tag(String)
+}
+
 // MARK: - View Models
 
 class AppViewModel: ObservableObject {
@@ -58,6 +66,7 @@ class AppViewModel: ObservableObject {
     @Published var whitelistFilter: WhitelistFilter = .all
     @Published var searchEntries: [SearchEntry] = []
     @Published var selectedEntry: SearchEntry?
+    @Published var sidebarSelection: SidebarSelection = .all
     
     // Add Mode Data
     @Published var currentURL: String = ""
@@ -89,18 +98,61 @@ class AppViewModel: ObservableObject {
         whitelistItems.filter { $0.type == "url" && (searchText.isEmpty || $0.value.lowercased().contains(searchText.lowercased())) }
     }
     
+    // MARK: - Search Sidebar Logic
+    var allCategories: [String] {
+        Array(Set(searchEntries.compactMap { $0.category.isEmpty ? nil : $0.category })).sorted()
+    }
+    
+    var allTags: [String] {
+        Array(Set(searchEntries.flatMap { $0.tags })).sorted()
+    }
+    
     // MARK: - Search Logic
     var filteredSearchEntries: [SearchEntry] {
-        if searchText.isEmpty {
-            return searchEntries
+        var baseEntries = searchEntries
+        
+        // 1. Sidebar Filter
+        switch sidebarSelection {
+        case .all:
+            break
+        case .recentlyAdded:
+            let yesterday = Int64(Date().timeIntervalSince1970) - 86400
+            baseEntries = baseEntries.filter { $0.timestamp >= yesterday }
+        case .untagged:
+            baseEntries = baseEntries.filter { $0.tags.isEmpty }
+        case .category(let cat):
+            baseEntries = baseEntries.filter { $0.category == cat }
+        case .tag(let tag):
+            baseEntries = baseEntries.filter { $0.tags.contains(tag) }
         }
-        let query = searchText.lowercased()
-        return searchEntries.filter { 
-            $0.title.lowercased().contains(query) || 
-            $0.url.lowercased().contains(query) || 
-            $0.description.lowercased().contains(query) ||
-            $0.category.lowercased().contains(query) ||
-            $0.tags.contains(where: { $0.lowercased().contains(query) })
+        
+        // 2. Text Search
+        if !searchText.isEmpty {
+            let query = searchText.lowercased()
+            baseEntries = baseEntries.filter { 
+                $0.title.lowercased().contains(query) || 
+                $0.url.lowercased().contains(query) || 
+                $0.description.lowercased().contains(query) ||
+                $0.category.lowercased().contains(query) ||
+                $0.tags.contains(where: { $0.lowercased().contains(query) })
+            }
+        }
+        
+        return baseEntries.sorted { $0.timestamp > $1.timestamp }
+    }
+    
+    func count(for selection: SidebarSelection) -> Int {
+        switch selection {
+        case .all: return searchEntries.count
+        case .recentlyAdded:
+            let yesterday = Int64(Date().timeIntervalSince1970) - 86400
+            return searchEntries.filter { $0.timestamp >= yesterday }.count
+        case .untagged:
+            return searchEntries.filter { $0.tags.isEmpty }.count
+        case .category(let cat):
+            return searchEntries.filter { $0.category == cat }.count
+        case .tag(let tag):
+            return searchEntries.filter { $0.tags.contains(tag) }.count
         }
     }
 }
@@ -168,30 +220,130 @@ struct SearchRow: View {
     let entry: SearchEntry
     let isSelected: Bool
     
+    var faviconURL: URL? {
+        // Use Google's favicon service for high-quality icons
+        if let domain = URL(string: entry.url)?.host {
+            return URL(string: "https://www.google.com/s2/favicons?domain=\(domain)&sz=64")
+        }
+        return nil
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(entry.title.isEmpty ? "No Title" : entry.title)
-                .font(.headline)
-                .lineLimit(1)
-                .foregroundColor(isSelected ? .white : .primary)
+        HStack(alignment: .top, spacing: 12) {
+            // Favicon
+            AsyncImage(url: faviconURL) { image in
+                image.resizable()
+            } placeholder: {
+                Image(systemName: "globe")
+                    .foregroundColor(.secondary)
+            }
+            .frame(width: 24, height: 24)
+            .cornerRadius(4)
+            .padding(.top, 2)
             
-            Text(entry.url)
-                .font(.caption)
-                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            
-            if !entry.category.isEmpty {
-                Text(entry.category)
-                    .font(.system(size: 10, weight: .bold))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(isSelected ? Color.white.opacity(0.2) : Color.blue.opacity(0.1))
-                    .foregroundColor(isSelected ? .white : .blue)
-                    .cornerRadius(4)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.title.isEmpty ? "No Title" : entry.title)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .lineLimit(1)
+                    .foregroundColor(isSelected ? .white : .primary)
+                
+                if !entry.description.isEmpty {
+                    Text(entry.description)
+                        .font(.caption)
+                        .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+                
+                HStack {
+                    Text(entry.url)
+                        .font(.system(size: 10))
+                        .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary.opacity(0.8))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    
+                    if !entry.category.isEmpty {
+                        Spacer()
+                        Text(entry.category)
+                            .font(.system(size: 9, weight: .bold))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(isSelected ? Color.white.opacity(0.2) : Color.blue.opacity(0.1))
+                            .foregroundColor(isSelected ? .white : .blue)
+                            .cornerRadius(3)
+                    }
+                }
             }
         }
+        .padding(.vertical, 6)
+    }
+}
+
+struct SidebarRow: View {
+    let title: String
+    let icon: String
+    let selection: SidebarSelection
+    @Binding var currentSelection: SidebarSelection
+    let count: Int
+    
+    var isSelected: Bool { selection == currentSelection }
+    
+    var body: some View {
+        Button(action: { currentSelection = selection }) {
+            HStack {
+                Label(title, systemImage: icon)
+                Spacer()
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(isSelected ? Color.white.opacity(0.3) : Color.secondary.opacity(0.1))
+                        .cornerRadius(10)
+                }
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(isSelected ? .white : .primary)
+        .padding(.horizontal, 8)
         .padding(.vertical, 4)
+        .background(isSelected ? Color.blue : Color.clear)
+        .cornerRadius(6)
+    }
+}
+
+struct SearchSidebarView: View {
+    @ObservedObject var viewModel: AppViewModel
+    
+    var body: some View {
+        List {
+            Section("Library") {
+                SidebarRow(title: "All URLs", icon: "tray.full", selection: .all, currentSelection: $viewModel.sidebarSelection, count: viewModel.count(for: .all))
+                SidebarRow(title: "Recently Added", icon: "clock", selection: .recentlyAdded, currentSelection: $viewModel.sidebarSelection, count: viewModel.count(for: .recentlyAdded))
+                SidebarRow(title: "Untagged", icon: "tag.slash", selection: .untagged, currentSelection: $viewModel.sidebarSelection, count: viewModel.count(for: .untagged))
+            }
+            
+            if !viewModel.allCategories.isEmpty {
+                Section("Categories") {
+                    ForEach(viewModel.allCategories, id: \.self) { cat in
+                        SidebarRow(title: cat, icon: "folder", selection: .category(cat), currentSelection: $viewModel.sidebarSelection, count: viewModel.count(for: .category(cat)))
+                    }
+                }
+            }
+            
+            if !viewModel.allTags.isEmpty {
+                Section("Tags") {
+                    ForEach(viewModel.allTags, id: \.self) { tag in
+                        SidebarRow(title: tag, icon: "tag", selection: .tag(tag), currentSelection: $viewModel.sidebarSelection, count: viewModel.count(for: .tag(tag)))
+                    }
+                }
+            }
+        }
+        .listStyle(SidebarListStyle())
+        .frame(minWidth: 200)
     }
 }
 
@@ -295,42 +447,81 @@ struct WhitelistView: View {
 struct SearchView: View {
     @ObservedObject var viewModel: AppViewModel
     
+    var groupedEntries: [(String, [SearchEntry])] {
+        let entries = viewModel.filteredSearchEntries
+        if entries.isEmpty { return [] }
+        
+        var groups: [(String, [SearchEntry])] = []
+        let calendar = Calendar.current
+        
+        let todayEntries = entries.filter { calendar.isDateInToday(Date(timeIntervalSince1970: TimeInterval($0.timestamp))) }
+        if !todayEntries.isEmpty { groups.append(("Today", todayEntries)) }
+        
+        let yesterdayEntries = entries.filter { calendar.isDateInYesterday(Date(timeIntervalSince1970: TimeInterval($0.timestamp))) }
+        if !yesterdayEntries.isEmpty { groups.append(("Yesterday", yesterdayEntries)) }
+        
+        let earlierEntries = entries.filter { 
+            let date = Date(timeIntervalSince1970: TimeInterval($0.timestamp))
+            return !calendar.isDateInToday(date) && !calendar.isDateInYesterday(date)
+        }
+        if !earlierEntries.isEmpty { groups.append(("Earlier", earlierEntries)) }
+        
+        return groups
+    }
+    
     var body: some View {
         NavigationSplitView {
+            SearchSidebarView(viewModel: viewModel)
+                .navigationTitle("Library")
+        } content: {
             VStack(spacing: 0) {
-                // Header
+                // Search Bar
                 HStack {
-                    Text("Search URLs")
-                        .font(.headline)
+                    Image(systemName: "magnifyingglass")
                         .foregroundColor(.secondary)
-                    Spacer()
-                    Button("Done") {
-                        NSApplication.shared.terminate(nil)
+                    TextField("Search...", text: $viewModel.searchText)
+                        .textFieldStyle(.plain)
+                }
+                .padding(10)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(10)
+                .padding()
+                
+                List(selection: $viewModel.selectedEntry) {
+                    ForEach(groupedEntries, id: \.0) { group in
+                        Section(header: Text(group.0).font(.caption).fontWeight(.bold)) {
+                            ForEach(group.1) { entry in
+                                SearchRow(entry: entry, isSelected: viewModel.selectedEntry?.id == entry.id)
+                                    .tag(entry)
+                            }
+                        }
+                    }
+                    
+                    if viewModel.filteredSearchEntries.isEmpty {
+                        Text("No results found")
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 40)
                     }
                 }
-                .padding()
-                .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
-                
-                // Search
-                TextField("Search saved URLs, tags, categories...", text: $viewModel.searchText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                
-                // List
-                List(viewModel.filteredSearchEntries, selection: $viewModel.selectedEntry) { entry in
-                    SearchRow(entry: entry, isSelected: viewModel.selectedEntry?.id == entry.id)
-                        .tag(entry)
-                }
-                .listStyle(SidebarListStyle())
+                .listStyle(InsetListStyle())
             }
-            .frame(minWidth: 250)
+            .frame(minWidth: 300)
+            .navigationTitle("Results")
         } detail: {
             if let entry = viewModel.selectedEntry {
                 SearchDetailView(entry: entry)
             } else {
-                Text("Select an item to view details")
-                    .foregroundColor(.secondary)
+                VStack(spacing: 12) {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text("Select an item to view details")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.windowBackgroundColor))
             }
         }
     }
@@ -339,38 +530,54 @@ struct SearchView: View {
 struct SearchDetailView: View {
     let entry: SearchEntry
     
+    var relativeDate: String {
+        let date = Date(timeIntervalSince1970: TimeInterval(entry.timestamp))
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+    
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(entry.title.isEmpty ? "No Title" : entry.title)
-                        .font(.title)
-                        .fontWeight(.bold)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
                     
-                    Text(entry.url)
-                        .font(.body)
-                        .foregroundColor(.blue)
-                        .onTapGesture {
-                            print("OPEN|\(entry.url)")
-                            NSApplication.shared.terminate(nil)
-                        }
+                    Button(action: {
+                        print("OPEN|\(entry.url)")
+                        NSApplication.shared.terminate(nil)
+                    }) {
+                        Text(entry.url)
+                            .font(.body)
+                            .foregroundColor(.blue)
+                            .underline()
+                    }
+                    .buttonStyle(.plain)
                 }
                 
-                if !entry.category.isEmpty || !entry.tags.isEmpty {
-                    HStack {
-                        if !entry.category.isEmpty {
-                            Label(entry.category, systemImage: "folder")
-                                .font(.subheadline)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.blue.opacity(0.1))
-                                .foregroundColor(.blue)
-                                .cornerRadius(6)
-                        }
-                        
+                HStack(spacing: 16) {
+                    if !entry.category.isEmpty {
+                        Label(entry.category, systemImage: "folder.fill")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.1))
+                            .foregroundColor(.blue)
+                            .cornerRadius(6)
+                    }
+                    
+                    Text("Added \(relativeDate)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                if !entry.tags.isEmpty {
+                    FlowLayout(spacing: 8) {
                         ForEach(entry.tags, id: \.self) { tag in
                             Label(tag, systemImage: "tag")
-                                .font(.subheadline)
+                                .font(.caption)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(Color.secondary.opacity(0.1))
@@ -381,23 +588,26 @@ struct SearchDetailView: View {
                 
                 Divider()
                 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Description")
-                        .font(.headline)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("DESCRIPTION")
+                        .font(.system(size: 11, weight: .black))
+                        .foregroundColor(.secondary)
+                    
                     Text(entry.description.isEmpty ? "No description provided." : entry.description)
                         .font(.body)
-                        .foregroundColor(.secondary)
+                        .lineSpacing(4)
                 }
                 
-                Spacer()
+                Spacer(minLength: 40)
                 
                 HStack(spacing: 12) {
                     Button(action: {
                         print("OPEN|\(entry.url)")
                         NSApplication.shared.terminate(nil)
                     }) {
-                        Label("Open in Chrome", systemImage: "safari")
+                        Label("Open in Chrome", systemImage: "safari.fill")
                             .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
@@ -406,17 +616,37 @@ struct SearchDetailView: View {
                         print("COPY|\(entry.url)")
                         NSApplication.shared.terminate(nil)
                     }) {
-                        Label("Copy URL", systemImage: "doc.on.doc")
+                        Label("Copy URL", systemImage: "doc.on.doc.fill")
                             .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
                 }
-                .padding(.top, 20)
             }
-            .padding(24)
+            .padding(32)
         }
         .background(Color(NSColor.windowBackgroundColor))
+    }
+}
+
+// Simple FlowLayout for Tags
+struct FlowLayout: View {
+    let spacing: CGFloat
+    let children: [AnyView]
+    
+    init<Views: View>(spacing: CGFloat = 8, @ViewBuilder content: () -> Views) {
+        self.spacing = spacing
+        // This is a simplified version for demonstration
+        self.children = [AnyView(content())]
+    }
+    
+    var body: some View {
+        HStack(spacing: spacing) {
+            ForEach(0..<children.count, id: \.self) { i in
+                children[i]
+            }
+        }
     }
 }
 
@@ -676,23 +906,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, 
-                               width: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : 700, 
-                               height: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : 500),
+                               width: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : (viewModel.mode == .search ? 900 : 700), 
+                               height: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : 600),
             styleMask: (viewModel.mode == .add || viewModel.mode == .save) ? [.titled, .closable, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
         
         if viewModel.mode != .add && viewModel.mode != .save {
-            window.minSize = NSSize(width: 600, height: 450)
+            window.minSize = NSSize(width: viewModel.mode == .search ? 850 : 600, height: 450)
         }
         
         window.center()
-        let titles: [AppMode: String] = [
-            .whitelist: "Manage Whitelist",
-            .search: "Search Saved URLs",
-            .add: "Whitelist URL",
-            .save: "Save URL"
-        ]
-        window.title = titles[viewModel.mode] ?? "Chrome URL Tracker"
+        window.titleVisibility = viewModel.mode == .search ? .hidden : .visible
+        window.titlebarAppearsTransparent = viewModel.mode == .search
         window.contentView = NSHostingView(rootView: contentView)
         window.delegate = self
         window.makeKeyAndOrderFront(nil)

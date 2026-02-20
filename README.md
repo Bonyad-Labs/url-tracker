@@ -7,7 +7,10 @@ A macOS-only background service that monitors Google Chrome tabs and allows you 
 - **Background Monitoring**: Automatically detects when you navigate to a new URL in Google Chrome.
 - **Menu Bar Integration**: Access common actions directly from the macOS menu bar.
 - **Unified Premium Manager**: A high-end native SwiftUI interface for all management tasks:
-    - **Search**: Interactive, live-filtering search with rich metadata views.
+    - **Organized Search**: High-end **3-column manager** (Sidebar → List → Detail) with:
+        - **Sidebar**: Smart filtering by Categories, Tags, and Library folders (Recently Added, Untagged).
+        - **Temporal Headers**: Automatic chronological grouping (Today, Yesterday, Earlier).
+        - **Visual Scanning**: High-quality site favicons and row previews (snippet-style).
     - **Save Entry**: Premium single-window form for capturing descriptions, categories, and tags.
     - **Whitelist Manager**: Professional tabular view with type icons, persistent metadata (Date Added), and segmented toggles (All/Domains/URLs).
     - **Quick Whitelist**: Modern "Domain vs URL" selection dialog for new detections.
@@ -50,7 +53,10 @@ Launch the interactive native search interface:
 ```bash
 ./chrome-url-tracker -search
 ```
-This will open a premium SwiftUI window with live-filtering, rich metadata detail view, and native "Open" and "Copy" actions.
+This will open a professional **3-column organized manager** with:
+- **Navigation Sidebar**: Quick access to smart folders, categories, and tags.
+- **Grouped List**: Results organized by date (Today/Yesterday/Earlier) with site icons.
+- **Rich Detail View**: Complete metadata display with interactive Open/Copy actions.
 
 ### Testing
 
