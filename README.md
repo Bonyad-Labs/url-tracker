@@ -9,7 +9,7 @@ A macOS-only background service that monitors Google Chrome tabs and allows you 
 - **Unified Premium Manager**: A high-end native SwiftUI interface for all management tasks:
     - **Search**: Interactive, live-filtering search with rich metadata views.
     - **Save Entry**: Premium single-window form for capturing descriptions, categories, and tags.
-    - **Whitelist Manager**: Manage global exclusions with smart categorization.
+    - **Whitelist Manager**: Professional tabular view with type icons, persistent metadata (Date Added), and segmented toggles (All/Domains/URLs).
     - **Quick Whitelist**: Modern "Domain vs URL" selection dialog for new detections.
 - **Native Notifications**: Real-time macOS system notifications for all background actions.
 - **Local Storage**: All data is stored locally on your machine in a thread-safe, atomic JSON store.

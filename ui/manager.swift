@@ -39,6 +39,14 @@ enum AppMode {
     case save
 }
 
+enum WhitelistFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case domains = "Domains"
+    case urls = "URLs"
+    
+    var id: String { self.rawValue }
+}
+
 // MARK: - View Models
 
 class AppViewModel: ObservableObject {
@@ -47,6 +55,7 @@ class AppViewModel: ObservableObject {
     
     // Whitelist/Search Data
     @Published var whitelistItems: [WhitelistItem] = []
+    @Published var whitelistFilter: WhitelistFilter = .all
     @Published var searchEntries: [SearchEntry] = []
     @Published var selectedEntry: SearchEntry?
     
@@ -196,12 +205,22 @@ struct WhitelistView: View {
             header
             
             VStack(spacing: 0) {
-                TextField("Search whitelisted items...", text: $viewModel.searchText)
-                    .textFieldStyle(.plain)
-                    .padding(12)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(8)
-                    .padding()
+                HStack(spacing: 16) {
+                    TextField("Search whitelisted items...", text: $viewModel.searchText)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(8)
+                    
+                    Picker("", selection: $viewModel.whitelistFilter) {
+                        ForEach(WhitelistFilter.allCases) { filter in
+                            Text(filter.rawValue).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
+                }
+                .padding()
                 
                 // Table Header
                 HStack(spacing: 0) {
@@ -222,20 +241,24 @@ struct WhitelistView: View {
                 .background(Color.black.opacity(0.1))
                 
                 List {
-                    if !viewModel.filteredDomains.isEmpty {
-                        Section(header: Text("Domains").font(.caption).fontWeight(.bold).foregroundColor(.blue)) {
-                            ForEach(viewModel.filteredDomains) { item in
-                                WhitelistRow(item: item)
-                                    .listRowBackground(Color.clear)
+                    if viewModel.whitelistFilter == .all || viewModel.whitelistFilter == .domains {
+                        if !viewModel.filteredDomains.isEmpty {
+                            Section(header: Text("Domains").font(.caption).fontWeight(.bold).foregroundColor(.blue)) {
+                                ForEach(viewModel.filteredDomains) { item in
+                                    WhitelistRow(item: item)
+                                        .listRowBackground(Color.clear)
+                                }
                             }
                         }
                     }
                     
-                    if !viewModel.filteredWhitelistedURLs.isEmpty {
-                        Section(header: Text("Specific URLs").font(.caption).fontWeight(.bold).foregroundColor(.blue)) {
-                            ForEach(viewModel.filteredWhitelistedURLs) { item in
-                                WhitelistRow(item: item)
-                                    .listRowBackground(Color.clear)
+                    if viewModel.whitelistFilter == .all || viewModel.whitelistFilter == .urls {
+                        if !viewModel.filteredWhitelistedURLs.isEmpty {
+                            Section(header: Text("Specific URLs").font(.caption).fontWeight(.bold).foregroundColor(.blue)) {
+                                ForEach(viewModel.filteredWhitelistedURLs) { item in
+                                    WhitelistRow(item: item)
+                                        .listRowBackground(Color.clear)
+                                }
                             }
                         }
                     }
