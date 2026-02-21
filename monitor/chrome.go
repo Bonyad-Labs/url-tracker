@@ -18,13 +18,13 @@ type TabInfo struct {
 
 // ChromeMonitor polls Google Chrome for changes to the active tab.
 type ChromeMonitor struct {
-	interval time.Duration // How often to poll Chrome
-	onChange func(TabInfo) // Callback triggered when a new URL is detected
-	lastURL  string        // The last seen URL to detect changes
+	interval time.Duration      // How often to poll Chrome
+	onChange func(TabInfo) bool // Callback triggered when a new URL is detected. Return true to update lastURL.
+	lastURL  string             // The last seen URL to detect changes
 }
 
 // New initializes a new ChromeMonitor with the specified poll interval.
-func New(interval time.Duration, onChange func(TabInfo)) *ChromeMonitor {
+func New(interval time.Duration, onChange func(TabInfo) bool) *ChromeMonitor {
 	return &ChromeMonitor{
 		interval: interval,
 		onChange: onChange,
@@ -49,8 +49,9 @@ func (m *ChromeMonitor) Start(ctx context.Context) {
 			}
 
 			if info.URL != "" && info.URL != m.lastURL {
-				m.lastURL = info.URL
-				m.onChange(info)
+				if m.onChange(info) {
+					m.lastURL = info.URL
+				}
 			}
 		}
 	}

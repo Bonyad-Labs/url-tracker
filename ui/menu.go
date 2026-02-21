@@ -7,10 +7,11 @@ import (
 
 // MenuHandlers defines the callbacks for various menu item actions.
 type MenuHandlers struct {
-	OnWhitelist       func() // Triggered when "Add to Whitelist" is clicked
-	OnManageWhitelist func() // Triggered when "Manage Whitelist" is clicked
-	OnSearch          func() // Triggered when "Search Saved URLs" is clicked
-	OnQuit            func() // Triggered when "Quit" is clicked
+	OnWhitelist       func()                       // Triggered when "Add to Whitelist" is clicked
+	OnManageWhitelist func()                       // Triggered when "Manage Whitelist" is clicked
+	OnSearch          func()                       // Triggered when "Search Saved URLs" is clicked
+	OnTogglePause     func(item *systray.MenuItem) // Triggered when "Pause Monitoring" is clicked
+	OnQuit            func()                       // Triggered when "Quit" is clicked
 }
 
 // StartMenu initializes and runs the system tray menu.
@@ -24,6 +25,8 @@ func StartMenu(handlers MenuHandlers) {
 		mManage := systray.AddMenuItem("Manage Whitelist", "View or remove whitelisted items")
 		mSearch := systray.AddMenuItem("Search Saved URLs", "Open interactive search")
 		systray.AddSeparator()
+		mPause := systray.AddMenuItem("Pause Monitoring", "Temporarily stop tracking new URLs")
+		systray.AddSeparator()
 		mQuit := systray.AddMenuItem("Quit", "Quit the application")
 
 		go func() {
@@ -35,6 +38,8 @@ func StartMenu(handlers MenuHandlers) {
 					handlers.OnManageWhitelist()
 				case <-mSearch.ClickedCh:
 					handlers.OnSearch()
+				case <-mPause.ClickedCh:
+					handlers.OnTogglePause(mPause)
 				case <-mQuit.ClickedCh:
 					handlers.OnQuit()
 				}

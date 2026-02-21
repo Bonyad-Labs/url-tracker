@@ -14,6 +14,7 @@ A macOS-only background service that monitors Google Chrome tabs and allows you 
     - **Save Entry**: Premium single-window form for capturing descriptions, categories, and tags.
     - **Whitelist Manager**: Professional tabular view with type icons, persistent metadata (Date Added), and segmented toggles (All/Domains/URLs).
     - **Quick Whitelist**: Modern "Domain vs URL" selection dialog for new detections.
+    - **Pause Monitoring**: Native toggle to temporarily suspend URL tracking.
 - **Native Notifications**: Real-time macOS system notifications for all background actions.
 - **Local Storage**: All data is stored locally in a high-performance **SQLite** database in the standard macOS `Application Support` directory.
 

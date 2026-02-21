@@ -17,10 +17,16 @@ import (
 	"chrome-url-tracker/monitor"
 	"chrome-url-tracker/storage"
 	"chrome-url-tracker/ui"
+
+	"github.com/getlantern/systray"
 )
 
 // isSearching is an atomic flag to prevent multiple search sessions from overlapping.
-var isSearching int32
+// isPaused is an atomic flag to control the monitoring state (0 = active, 1 = paused).
+var (
+	isSearching int32 = 0
+	isPaused    int32 = 0
+)
 
 // main initializes the application, storage, and starts both the menu and monitoring loops.
 func main() {
@@ -108,6 +114,17 @@ func main() {
 				ui.ShowNotification("Chrome Tracker", "Search is already active")
 			}
 		},
+		OnTogglePause: func(item *systray.MenuItem) {
+			// Toggle between 0 (active) and 1 (paused)
+			if atomic.CompareAndSwapInt32(&isPaused, 0, 1) {
+				item.SetTitle("Resume Monitoring")
+				ui.ShowNotification("Chrome Tracker", "Monitoring Paused")
+			} else {
+				atomic.StoreInt32(&isPaused, 0)
+				item.SetTitle("Pause Monitoring")
+				ui.ShowNotification("Chrome Tracker", "Monitoring Resumed")
+			}
+		},
 		OnQuit: func() {
 			cancel()
 			os.Exit(0)
@@ -120,13 +137,17 @@ func main() {
 func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Duration) {
 	seenUrls := make(map[string]bool)
 
-	m := monitor.New(interval, func(tab monitor.TabInfo) {
+	m := monitor.New(interval, func(tab monitor.TabInfo) bool {
+		if atomic.LoadInt32(&isPaused) == 1 {
+			return false // Silently skip and don't update lastURL
+		}
+
 		if store.IsExcluded(tab.URL) {
-			return
+			return true
 		}
 
 		if seenUrls[tab.URL] || store.EntryExists(tab.URL) {
-			return
+			return true
 		}
 
 		// Show native modern save dialog
@@ -142,7 +163,7 @@ func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Dur
 					seenUrls[tab.URL] = true
 				}
 			}
-			return
+			return true
 		}
 
 		if saved {
@@ -157,13 +178,14 @@ func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Dur
 			if err != nil {
 				ui.ShowNotification("Error", fmt.Sprintf("Failed to save URL: %v", err))
 			} else {
-				ui.ShowNotification("Success", "URL saved successfully")
+				ui.ShowNotification("Chrome Tracker", "Saved: "+tab.Title)
 				seenUrls[tab.URL] = true
 			}
 		} else {
 			// Mark as seen anyway to avoid re-prompting immediately in this session
 			seenUrls[tab.URL] = true
 		}
+		return true
 	})
 
 	m.Start(ctx)
