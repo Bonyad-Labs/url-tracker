@@ -1,10 +1,17 @@
 #!/bin/bash
 
 # Configuration
+APP_NAME="ChromeURLTracker.app"
+APP_DIR="$HOME/Applications/$APP_NAME"
+CONTENTS_DIR="$APP_DIR/Contents"
+MACOS_DIR="$CONTENTS_DIR/MacOS"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
+
 BINARY_NAME="chrome-url-tracker"
-INSTALL_PATH="$HOME/usr/local/bin/$BINARY_NAME"
+INSTALL_PATH="$MACOS_DIR/$BINARY_NAME"
+
 PLIST_NAME="com.user.chrome-url-tracker.plist"
-PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME"
+LAUNCHAGENT_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME"
 
 echo "Building $BINARY_NAME..."
 go build -o "$BINARY_NAME" main.go
@@ -17,19 +24,43 @@ fi
 echo "Building native UI components..."
 swiftc ui/manager.swift -o whitelist-manager
 
-echo "Installing binary to $INSTALL_PATH..."
-mkdir -p "$(dirname "$INSTALL_PATH")"
+echo "Creating .app bundle structure..."
+mkdir -p "$MACOS_DIR"
+mkdir -p "$RESOURCES_DIR"
+
+echo "Installing binaries to $MACOS_DIR..."
 cp "$BINARY_NAME" "$INSTALL_PATH"
-cp "whitelist-manager" "$(dirname "$INSTALL_PATH")/whitelist-manager"
+cp "whitelist-manager" "$MACOS_DIR/whitelist-manager"
+
+echo "Creating Info.plist..."
+cat <<EOF > "$CONTENTS_DIR/Info.plist"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>$BINARY_NAME</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.user.chrome-url-tracker</string>
+    <key>CFBundleName</key>
+    <string>ChromeURLTracker</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>
+EOF
 
 echo "Updating LaunchAgent..."
 # Ensure directory exists
 mkdir -p "$HOME/Library/LaunchAgents"
 
 # Create plist if it doesn't exist
-if [ ! -f "$PLIST_PATH" ]; then
-    echo "Creating new LaunchAgent plist..."
-    cat <<EOF > "$PLIST_PATH"
+echo "Creating new LaunchAgent plist..."
+cat <<EOF > "$LAUNCHAGENT_PATH"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -51,11 +82,10 @@ if [ ! -f "$PLIST_PATH" ]; then
 </dict>
 </plist>
 EOF
-fi
 
 # Reload LaunchAgent
 echo "Reloading LaunchAgent..."
-launchctl unload "$PLIST_PATH" 2>/dev/null
-launchctl load "$PLIST_PATH"
+launchctl unload "$LAUNCHAGENT_PATH" 2>/dev/null
+launchctl load "$LAUNCHAGENT_PATH"
 
 echo "Done! Chrome URL Tracker is updated and running."

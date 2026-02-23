@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -17,6 +18,15 @@ import (
 var uiMu sync.Mutex
 
 func getCmdPath() string {
+	execPath, err := os.Executable()
+	if err == nil {
+		dir := filepath.Dir(execPath)
+		appCmdPath := filepath.Join(dir, "whitelist-manager")
+		if _, err := os.Stat(appCmdPath); err == nil {
+			return appCmdPath
+		}
+	}
+
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
 		return ""
