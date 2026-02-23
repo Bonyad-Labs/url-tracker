@@ -142,6 +142,14 @@ func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Dur
 			return false // Silently skip and don't update lastURL
 		}
 
+		// Strip URL of query parameters and fragment
+		if idx := strings.Index(tab.URL, "?"); idx != -1 {
+			tab.URL = tab.URL[:idx]
+		}
+		if idx := strings.Index(tab.URL, "#"); idx != -1 {
+			tab.URL = tab.URL[:idx]
+		}
+
 		if store.IsExcluded(tab.URL) {
 			return true
 		}
