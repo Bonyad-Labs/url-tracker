@@ -16,6 +16,20 @@ import (
 // This prevents multiple dialogs from overlapping and causing diagnostic errors.
 var uiMu sync.Mutex
 
+func getCmdPath() string {
+	userHomeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+
+	cmdPath := userHomeDir + "/usr/local/bin/whitelist-manager"
+	if _, err := os.Stat("./whitelist-manager"); err == nil {
+		cmdPath = "./whitelist-manager"
+	}
+
+	return cmdPath
+}
+
 // ShowWhitelistManager displays the native SwiftUI whitelist manager window.
 func ShowWhitelistManager(items interface{}) (selected string, ok bool) {
 	data, err := json.Marshal(items)
@@ -23,9 +37,9 @@ func ShowWhitelistManager(items interface{}) (selected string, ok bool) {
 		return "", false
 	}
 
-	cmdPath := "/Users/ahmad/usr/local/bin/whitelist-manager"
-	if _, err := os.Stat("./whitelist-manager"); err == nil {
-		cmdPath = "./whitelist-manager"
+	cmdPath := getCmdPath()
+	if cmdPath == "" {
+		return "", false
 	}
 
 	uiMu.Lock()
@@ -53,9 +67,9 @@ func ShowSearchManager(entries interface{}) (action string, value string, ok boo
 		return "", "", false
 	}
 
-	cmdPath := "/Users/ahmad/usr/local/bin/whitelist-manager"
-	if _, err := os.Stat("./whitelist-manager"); err == nil {
-		cmdPath = "./whitelist-manager"
+	cmdPath := getCmdPath()
+	if cmdPath == "" {
+		return "", "", false
 	}
 
 	uiMu.Lock()
@@ -83,9 +97,9 @@ func ShowSearchManager(entries interface{}) (action string, value string, ok boo
 // ShowAddWhitelistDialog displays a native SwiftUI dialog to choose between
 // whitelisting the domain or the specific URL.
 func ShowAddWhitelistDialog(url, title string) (selection string, ok bool) {
-	cmdPath := "/Users/ahmad/usr/local/bin/whitelist-manager"
-	if _, err := os.Stat("./whitelist-manager"); err == nil {
-		cmdPath = "./whitelist-manager"
+	cmdPath := getCmdPath()
+	if cmdPath == "" {
+		return "", false
 	}
 
 	uiMu.Lock()
@@ -108,9 +122,9 @@ func ShowAddWhitelistDialog(url, title string) (selection string, ok bool) {
 // ShowSaveDialog displays a native SwiftUI form to capture URL metadata.
 // It returns the metadata fields and flags for save/whitelist actions.
 func ShowSaveDialog(url, title string) (description string, tags []string, category string, saved bool, whitelist bool) {
-	cmdPath := "/Users/ahmad/usr/local/bin/whitelist-manager"
-	if _, err := os.Stat("./whitelist-manager"); err == nil {
-		cmdPath = "./whitelist-manager"
+	cmdPath := getCmdPath()
+	if cmdPath == "" {
+		return "", nil, "", false, false
 	}
 
 	uiMu.Lock()
