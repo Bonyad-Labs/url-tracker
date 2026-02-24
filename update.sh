@@ -54,6 +54,9 @@ cat <<EOF > "$CONTENTS_DIR/Info.plist"
 </plist>
 EOF
 
+echo "Signing the application bundle..."
+codesign --force --deep --sign - "$APP_DIR"
+
 echo "Updating LaunchAgent..."
 # Ensure directory exists
 mkdir -p "$HOME/Library/LaunchAgents"

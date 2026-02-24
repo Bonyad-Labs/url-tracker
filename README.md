@@ -1,10 +1,10 @@
 # Chrome URL Tracker
 
-A macOS-only background service that monitors Google Chrome tabs and allows you to save and search URLs with custom metadata.
+A macOS-only background service that monitors Google Chrome and Safari tabs, allowing you to save and search URLs with custom metadata.
 
 ## Features
 
-- **Background Monitoring**: Automatically detects when you navigate to a new URL in Google Chrome.
+- **Background Monitoring**: Automatically detects when you navigate to a new URL in Google Chrome or Safari. URL query parameters and fragments are ignored to prevent duplicates.
 - **Menu Bar Integration**: Access common actions directly from the macOS menu bar.
 - **Unified Premium Manager**: A high-end native SwiftUI interface for all management tasks:
     - **Organized Search**: High-end **3-column manager** (Sidebar → List → Detail) with:
@@ -35,16 +35,16 @@ A macOS-only background service that monitors Google Chrome tabs and allows you 
    ./update.sh
    ```
 3. **Grant Permissions**: 
-   - When prompted or via System Settings, grant your Terminal/Binary permission for **Automation** (to control Google Chrome) and **Accessibility** (to display dialogs).
+   - When prompted or via System Settings, grant your Terminal/Binary permission for **Automation** (to control Google Chrome and Safari) and **Accessibility** (to display dialogs).
 
 ### Usage
 
 #### Monitor Mode (Default)
-The service runs in the background, monitoring your Chrome tabs. When a new URL is detected, it presents a **unified native SwiftUI form** to quickly save metadata or whitelist the domain.
+The service runs in the background, monitoring your browser tabs. When a new URL is detected, it presents a **unified native SwiftUI form** to quickly save metadata or whitelist the domain.
 
 To run manually for testing:
 ```bash
-./chrome-url-tracker
+~/Applications/ChromeURLTracker.app/Contents/MacOS/chrome-url-tracker
 ```
 Optional flags:
 - `-interval 1000`: Set polling interval in milliseconds (default 1000ms).
@@ -52,7 +52,7 @@ Optional flags:
 
 Launch the interactive native search interface:
 ```bash
-./chrome-url-tracker -search
+~/Applications/ChromeURLTracker.app/Contents/MacOS/chrome-url-tracker -search
 ```
 This will open a professional **3-column organized manager** with:
 - **Navigation Sidebar**: Quick access to smart folders, categories, and tags.
@@ -83,7 +83,7 @@ go test -cover ./storage
 ## Project Structure
 
 - `main.go`: Application coordination, mode selection, and database lifecycle management.
-- `monitor/`: Chrome tab polling and active tab detection logic.
+- `monitor/`: Browser tab polling and active tab detection logic.
 - `storage/`: SQLite storage layer with schema management and data persistence.
 - `ui/`: macOS dialog orchestration and native SwiftUI bridge.
 - `update.sh`: Build and LaunchAgent management script.
@@ -92,7 +92,6 @@ go test -cover ./storage
 
 - **Premium Web Dashboard**: A high-end browser-based interface for managing and visualizing saved URLs with filters and analytics.
 - **Global Hotkeys**: Custom keyboard shortcuts to trigger search or quick-save.
-- **Safari Support**: Extend monitoring to other browsers.
 
 ## License
 
