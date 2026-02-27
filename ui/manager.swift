@@ -32,11 +32,21 @@ struct SearchEntry: Identifiable, Codable, Hashable {
     }
 }
 
-enum AppMode {
+enum AppMode: String, Codable {
     case whitelist
     case search
     case add
     case save
+    case dashboard // New unified mode
+}
+
+// MARK: - IPC Command Protocol
+struct IPCCommand: Codable {
+    let mode: AppMode
+    let searchData: [SearchEntry]?
+    let whitelistData: [WhitelistItem]?
+    let url: String?
+    let title: String?
 }
 
 enum WhitelistFilter: String, CaseIterable, Identifiable {
@@ -77,12 +87,37 @@ class AppViewModel: ObservableObject {
     @Published var saveCategory: String = "Research"
     @Published var saveTags: String = ""
     
-    init(items: [WhitelistItem] = [], entries: [SearchEntry] = [], mode: AppMode = .whitelist, url: String = "", title: String = "") {
+    init(items: [WhitelistItem] = [], entries: [SearchEntry] = [], mode: AppMode = .dashboard, url: String = "", title: String = "") {
         self.whitelistItems = items
         self.searchEntries = entries
         self.mode = mode
         self.currentURL = url
         self.currentTitle = title
+    }
+    
+    // Process incoming IPC commands from Go
+    func handleCommand(_ cmd: IPCCommand) {
+        DispatchQueue.main.async {
+            self.mode = cmd.mode
+            if let entries = cmd.searchData {
+                self.searchEntries = entries
+            }
+            if let items = cmd.whitelistData {
+                self.whitelistItems = items
+            }
+            if let u = cmd.url {
+                self.currentURL = u
+            }
+            if let t = cmd.title {
+                self.currentTitle = t
+            }
+            
+            // Bring app to front
+            NSApp.activate(ignoringOtherApps: true)
+            if let window = NSApp.windows.first {
+                window.makeKeyAndOrderFront(nil)
+            }
+        }
     }
     
     // MARK: - Whitelist Logic
@@ -198,8 +233,8 @@ struct WhitelistRow: View {
             
             // Action
             Button(action: {
-                print(item.value) // Output to Go via stdout
-                NSApplication.shared.terminate(nil)
+                print("DELETE_WHITELIST|\(item.value)")
+                fflush(stdout)
             }) {
                 Image(systemName: "trash")
                     .font(.caption)
@@ -434,10 +469,6 @@ struct WhitelistView: View {
                 .font(.headline)
                 .foregroundColor(.secondary)
             Spacer()
-            Button("Done") {
-                NSApplication.shared.terminate(nil)
-            }
-            .keyboardShortcut(.defaultAction)
         }
         .padding()
         .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
@@ -546,7 +577,7 @@ struct SearchDetailView: View {
                     
                     Button(action: {
                         print("OPEN|\(entry.url)")
-                        NSApplication.shared.terminate(nil)
+                        fflush(stdout)
                     }) {
                         Text(entry.url)
                             .font(.body)
@@ -603,7 +634,7 @@ struct SearchDetailView: View {
                 HStack(spacing: 12) {
                     Button(action: {
                         print("OPEN|\(entry.url)")
-                        NSApplication.shared.terminate(nil)
+                        fflush(stdout)
                     }) {
                         Label("Open in Chrome", systemImage: "safari.fill")
                             .frame(maxWidth: .infinity)
@@ -614,7 +645,7 @@ struct SearchDetailView: View {
                     
                     Button(action: {
                         print("COPY|\(entry.url)")
-                        NSApplication.shared.terminate(nil)
+                        fflush(stdout)
                     }) {
                         Label("Copy URL", systemImage: "doc.on.doc.fill")
                             .frame(maxWidth: .infinity)
@@ -653,10 +684,6 @@ struct FlowLayout: View {
 struct AddView: View {
     @ObservedObject var viewModel: AppViewModel
     
-    var domain: String {
-        URL(string: viewModel.currentURL)?.host ?? viewModel.currentURL
-    }
-    
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 8) {
@@ -676,70 +703,69 @@ struct AddView: View {
             }
             .padding(.top, 8)
             
-            VStack(spacing: 12) {
-                // Domain Option
-                Button(action: {
-                    print(domain)
-                    NSApplication.shared.terminate(nil)
-                }) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Whitelist Domain")
-                                .font(.headline)
-                            Text(domain)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "globe")
-                            .font(.title2)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(12)
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("URL or Domain to Whitelist")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                    TextField("Enter domain or URL...", text: $viewModel.currentURL)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(8)
                 }
-                .buttonStyle(.plain)
                 
-                // URL Option
-                Button(action: {
-                    print(viewModel.currentURL)
-                    NSApplication.shared.terminate(nil)
-                }) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Whitelist Specific URL")
-                                .font(.headline)
-                            Text(viewModel.currentURL)
-                                .font(.caption)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "link")
-                            .font(.title2)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(12)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Title (Optional)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                    TextField("Enter title...", text: $viewModel.currentTitle)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(8)
                 }
-                .buttonStyle(.plain)
             }
             
-            HStack {
+            HStack(spacing: 12) {
                 Button("Cancel") {
-                    NSApplication.shared.terminate(nil)
+                    print("CANCEL|")
+                    fflush(stdout)
+                    viewModel.mode = .dashboard
+                    if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                        NSApp.windows.first?.close() // If standalone window
+                    }
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(10)
                 
-                Spacer()
+                Button(action: {
+                    print("ADD_WHITELIST|\\(viewModel.currentURL)")
+                    fflush(stdout)
+                    viewModel.mode = .dashboard
+                    if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                        NSApp.windows.first?.close()
+                    }
+                }) {
+                    Text("Save")
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.return, modifiers: [])
             }
         }
         .padding(32)
-        .frame(width: 400)
+        .frame(width: 450)
     }
 }
 
@@ -825,8 +851,11 @@ struct SaveView: View {
                     ]
                     if let jsonData = try? JSONEncoder().encode(response),
                        let jsonString = String(data: jsonData, encoding: .utf8) {
-                        print(jsonString)
-                        NSApplication.shared.terminate(nil)
+                        print("SAVE_ENTRY|\(jsonString)")
+                        fflush(stdout)
+                        if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                            NSApp.windows.first?.close()
+                        }
                     }
                 }) {
                     Text("Save Entry")
@@ -842,8 +871,11 @@ struct SaveView: View {
                 
                 HStack(spacing: 12) {
                     Button(action: {
-                        print("{\"action\": \"whitelist\"}")
-                        NSApplication.shared.terminate(nil)
+                        print("ACTION_WHITELIST|")
+                        fflush(stdout)
+                        if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                            NSApp.windows.first?.close()
+                        }
                     }) {
                         Text("Whitelist...")
                             .frame(maxWidth: .infinity)
@@ -854,7 +886,11 @@ struct SaveView: View {
                     .buttonStyle(.plain)
                     
                     Button(action: {
-                        NSApplication.shared.terminate(nil)
+                        print("ACTION_SKIP|")
+                        fflush(stdout)
+                        if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                            NSApp.windows.first?.close()
+                        }
                     }) {
                         Text("Skip")
                             .frame(maxWidth: .infinity)
@@ -874,24 +910,49 @@ struct SaveView: View {
     }
 }
 
+struct UnifiedDashboardView: View {
+    @ObservedObject var viewModel: AppViewModel
+    
+    // We use a local state to switch between the two main modes
+    @State private var selectedTab: Int = 0 
+    
+    var body: some View {
+        TabView(selection: Binding(
+            get: { self.viewModel.mode == .whitelist ? 1 : 0 },
+            set: { self.viewModel.mode = $0 == 1 ? .whitelist : .search }
+        )) {
+            SearchView(viewModel: viewModel)
+                .tabItem {
+                    Label("Saved URLs", systemImage: "magnifyingglass")
+                }
+                .tag(0)
+            
+            WhitelistView(viewModel: viewModel)
+                .tabItem {
+                    Label("Whitelist", systemImage: "shield.checkered")
+                }
+                .tag(1)
+        }
+        .padding()
+    }
+}
+
 struct MainContentView: View {
     @StateObject var viewModel: AppViewModel
     
     var body: some View {
         Group {
             switch viewModel.mode {
-            case .whitelist:
-                WhitelistView(viewModel: viewModel)
-            case .search:
-                SearchView(viewModel: viewModel)
+            case .whitelist, .search, .dashboard:
+                UnifiedDashboardView(viewModel: viewModel)
             case .add:
                 AddView(viewModel: viewModel)
             case .save:
                 SaveView(viewModel: viewModel)
             }
         }
-        .frame(minWidth: (viewModel.mode == .add || viewModel.mode == .save) ? 400 : 600, 
-               minHeight: (viewModel.mode == .add || viewModel.mode == .save) ? 350 : 450)
+        .frame(minWidth: (viewModel.mode == .add || viewModel.mode == .save) ? 400 : 800, 
+               minHeight: (viewModel.mode == .add || viewModel.mode == .save) ? 350 : 500)
     }
 }
 
@@ -906,31 +967,55 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, 
-                               width: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : (viewModel.mode == .search ? 900 : 700), 
+                               width: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : 900, 
                                height: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : 600),
             styleMask: (viewModel.mode == .add || viewModel.mode == .save) ? [.titled, .closable, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
         
         if viewModel.mode != .add && viewModel.mode != .save {
-            window.minSize = NSSize(width: viewModel.mode == .search ? 850 : 600, height: 450)
+            window.minSize = NSSize(width: 850, height: 450)
         }
         
         window.center()
-        window.titleVisibility = viewModel.mode == .search ? .hidden : .visible
-        window.titlebarAppearsTransparent = viewModel.mode == .search
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
         window.contentView = NSHostingView(rootView: contentView)
         window.delegate = self
-        window.makeKeyAndOrderFront(nil)
         
-        NSApp.activate(ignoringOtherApps: true)
+        // Only show window immediately if a specific command was passed on boot
+        if viewModel.mode != .dashboard {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        
+        // Start background IPC listener
+        startStdinListener()
+    }
+    
+    func startStdinListener() {
+        DispatchQueue.global(qos: .background).async {
+            let fileHandle = FileHandle.standardInput
+            // Using lines iterator instead of readDataToEndOfFile to keep it alive
+            while let data = fileHandle.availableData as Data?, data.count > 0 {
+                if let str = String(data: data, encoding: .utf8) {
+                    let lines = str.components(separatedBy: .newlines)
+                    for line in lines where !line.isEmpty {
+                        if let cmdData = line.data(using: .utf8),
+                           let command = try? JSONDecoder().decode(IPCCommand.self, from: cmdData) {
+                            self.viewModel.handleCommand(command)
+                        }
+                    }
+                }
+            }
+        }
     }
     
     func windowWillClose(_ notification: Notification) {
-        NSApplication.shared.terminate(nil)
+        // App stays alive in background! Just hide the window.
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return true
+        return true // Quit UI when window is closed
     }
 }
 
@@ -950,7 +1035,8 @@ for (index, arg) in args.enumerated() {
         case "search": mode = .search
         case "add": mode = .add
         case "save": mode = .save
-        default: mode = .whitelist
+        case "dashboard": mode = .dashboard
+        default: mode = .dashboard
         }
     }
     if arg == "--url" && index + 1 < args.count {

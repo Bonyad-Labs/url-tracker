@@ -52,6 +52,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Start background IPC background loop
+	startIPCListener(store)
+
 	// Start monitor in background
 	go runMonitorMode(ctx, store, time.Duration(*intervalFlag)*time.Millisecond)
 
@@ -60,59 +63,21 @@ func main() {
 		OnWhitelist: func() {
 			// Try to get active tab to provide modern context-aware whitelisting
 			tab, err := monitor.GetActiveTab()
+			tabURL := "localhost"
+			tabTitle := "localhost"
 			if err == nil {
-				selection, ok := ui.ShowAddWhitelistDialog(tab.URL, tab.Title)
-				if ok {
-					err := store.AddExcludedDomain(selection)
-					if err != nil {
-						ui.ShowNotification("Error", fmt.Sprintf("Failed to whitelist: %v", err))
-					} else {
-						ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", selection))
-					}
-				}
-				return
+				tabURL = tab.URL
+				tabTitle = tab.Title
 			}
-
-			// Fallback: Manual input if no active tab found
-			domain, _, ok := ui.ShowInputDialog("Add to Whitelist", "Enter domain to exclude (e.g. youtube.com):", "", []string{"Cancel", "OK"})
-			if ok && domain != "" {
-				err := store.AddExcludedDomain(domain)
-				if err != nil {
-					ui.ShowNotification("Error", fmt.Sprintf("Failed to add whitelist: %v", err))
-				} else {
-					ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", domain))
-				}
-			}
+			ui.ShowAddWhitelistDialog(tabURL, tabTitle)
 		},
 		// Handle "Manage Whitelist" action from the menu bar
 		OnManageWhitelist: func() {
 			items := store.GetExcludedDomains()
-			if len(items) == 0 {
-				ui.ShowNotification("Chrome Tracker", "Whitelist is empty")
-				return
-			}
-
-			selected, ok := ui.ShowWhitelistManager(items)
-			if ok && selected != "" {
-				if ui.ShowConfirm("Confirm Removal", fmt.Sprintf("Remove %s from whitelist?", selected)) {
-					err := store.RemoveExcludedDomain(selected)
-					if err != nil {
-						ui.ShowNotification("Error", fmt.Sprintf("Failed to remove: %v", err))
-					} else {
-						ui.ShowNotification("Success", fmt.Sprintf("Removed from whitelist: %s", selected))
-					}
-				}
-			}
+			ui.ShowWhitelistManager(items)
 		},
 		OnSearch: func() {
-			if atomic.CompareAndSwapInt32(&isSearching, 0, 1) {
-				go func() {
-					runSearchMode(store)
-					atomic.StoreInt32(&isSearching, 0)
-				}()
-			} else {
-				ui.ShowNotification("Chrome Tracker", "Search is already active")
-			}
+			go runSearchMode(store)
 		},
 		OnTogglePause: func(item *systray.MenuItem) {
 			// Toggle between 0 (active) and 1 (paused)
@@ -126,10 +91,77 @@ func main() {
 			}
 		},
 		OnQuit: func() {
-			cancel()
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				fmt.Println("Error finding home directory:", err)
+				return
+			}
+			cmd := exec.Command("launchctl", "unload", homeDir+"/Library/LaunchAgents/com.user.chrome-url-tracker.plist")
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				// Log error and command output for debugging
+				log.Fatalf("Failed to unload launchctl job: %v\nOutput: %s", err, string(output))
+			}
 			os.Exit(0)
 		},
 	})
+}
+
+// startIPCListener runs in the background to handle commands returning from the persistent Swift app.
+func startIPCListener(store *storage.Store) {
+	go func() {
+		for {
+			if msg, ok := ui.ConsumeIPCResult(); ok {
+				handleIPCMessage(msg, store)
+			} else {
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}()
+}
+
+func handleIPCMessage(msg string, store *storage.Store) {
+	parts := strings.SplitN(msg, "|", 2)
+	if len(parts) == 0 {
+		return
+	}
+
+	action := parts[0]
+	value := ""
+	if len(parts) > 1 {
+		value = parts[1]
+	}
+
+	switch action {
+	case "ADD_WHITELIST":
+		if value != "" {
+			err := store.AddExcludedDomain(value)
+			if err != nil {
+				ui.ShowNotification("Error", fmt.Sprintf("Failed to whitelist: %v", err))
+			} else {
+				ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", value))
+				// Refresh the UI to reflect changes
+				ui.ShowWhitelistManager(store.GetExcludedDomains())
+			}
+		}
+	case "DELETE_WHITELIST":
+		if ui.ShowConfirm("Confirm Removal", fmt.Sprintf("Remove %s from whitelist?", value)) {
+			err := store.RemoveExcludedDomain(value)
+			if err != nil {
+				ui.ShowNotification("Error", fmt.Sprintf("Failed to remove: %v", err))
+			} else {
+				ui.ShowNotification("Success", fmt.Sprintf("Removed from whitelist: %s", value))
+				// Refresh the UI to reflect changes
+				ui.ShowWhitelistManager(store.GetExcludedDomains())
+			}
+		}
+	case "OPEN":
+		openURLInChrome(value)
+		ui.ShowNotification("Success", "Opening in Chrome")
+	case "COPY":
+		copyToClipboard(value)
+		ui.ShowNotification("Success", "URL copied to clipboard")
+	}
 }
 
 // runMonitorMode executes the polling loop and coordinates detection logic.
@@ -161,16 +193,8 @@ func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Dur
 		// Show native modern save dialog
 		desc, tags, cat, saved, whitelist := ui.ShowSaveDialog(tab.URL, tab.Title)
 		if whitelist {
-			selection, ok := ui.ShowAddWhitelistDialog(tab.URL, tab.Title)
-			if ok {
-				err := store.AddExcludedDomain(selection)
-				if err != nil {
-					ui.ShowNotification("Error", fmt.Sprintf("Failed to whitelist: %v", err))
-				} else {
-					ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", selection))
-					seenUrls[tab.URL] = true
-				}
-			}
+			ui.ShowAddWhitelistDialog(tab.URL, tab.Title)
+			seenUrls[tab.URL] = true
 			return true
 		}
 
@@ -202,24 +226,7 @@ func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Dur
 // runSearchMode executes the interactive search interface using the native SwiftUI manager.
 func runSearchMode(store *storage.Store) {
 	entries := store.GetEntries()
-	if len(entries) == 0 {
-		ui.ShowNotification("Search Mode", "No saved URLs found")
-		return
-	}
-
-	action, value, ok := ui.ShowSearchManager(entries)
-	if !ok {
-		return
-	}
-
-	switch action {
-	case "open":
-		openURLInChrome(value)
-		ui.ShowNotification("Success", "Opening in Chrome")
-	case "copy":
-		copyToClipboard(value)
-		ui.ShowNotification("Success", "URL copied to clipboard")
-	}
+	ui.ShowSearchManager(entries)
 }
 
 func openURLInChrome(url string) {
