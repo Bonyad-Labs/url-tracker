@@ -130,24 +130,12 @@ func sendIPCCommand(cmd ipcCommand) error {
 	return err
 }
 
-// ShowWhitelistManager displays the native SwiftUI whitelist manager window.
-func ShowWhitelistManager(items interface{}) (selected string, ok bool) {
+// ShowDashboard displays the native SwiftUI dashboard with both data models.
+func ShowDashboard(mode string, whitelistItems interface{}, searchEntries interface{}) (action string, value string, ok bool) {
 	cmd := ipcCommand{
-		Mode:          "whitelist",
-		WhitelistData: items,
-	}
-	sendIPCCommand(cmd)
-
-	// We don't block for a result here anymore; the UI handles its own lifecycle.
-	// We'll read from uiResultChan if a deletion action occurs.
-	return "", true
-}
-
-// ShowSearchManager displays the native SwiftUI search manager window.
-func ShowSearchManager(entries interface{}) (action string, value string, ok bool) {
-	cmd := ipcCommand{
-		Mode:       "search",
-		SearchData: entries,
+		Mode:          mode,
+		WhitelistData: whitelistItems,
+		SearchData:    searchEntries,
 	}
 	sendIPCCommand(cmd)
 	return "", "", true

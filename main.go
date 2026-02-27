@@ -71,10 +71,10 @@ func main() {
 			}
 			ui.ShowAddWhitelistDialog(tabURL, tabTitle)
 		},
-		// Handle "Manage Whitelist" action from the menu bar
 		OnManageWhitelist: func() {
 			items := store.GetExcludedDomains()
-			ui.ShowWhitelistManager(items)
+			entries := store.GetEntries()
+			ui.ShowDashboard("whitelist", items, entries)
 		},
 		OnSearch: func() {
 			go runSearchMode(store)
@@ -141,7 +141,7 @@ func handleIPCMessage(msg string, store *storage.Store) {
 			} else {
 				ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", value))
 				// Refresh the UI to reflect changes
-				ui.ShowWhitelistManager(store.GetExcludedDomains())
+				ui.ShowDashboard("whitelist", store.GetExcludedDomains(), store.GetEntries())
 			}
 		}
 	case "DELETE_WHITELIST":
@@ -152,7 +152,7 @@ func handleIPCMessage(msg string, store *storage.Store) {
 			} else {
 				ui.ShowNotification("Success", fmt.Sprintf("Removed from whitelist: %s", value))
 				// Refresh the UI to reflect changes
-				ui.ShowWhitelistManager(store.GetExcludedDomains())
+				ui.ShowDashboard("whitelist", store.GetExcludedDomains(), store.GetEntries())
 			}
 		}
 	case "OPEN":
@@ -226,7 +226,8 @@ func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Dur
 // runSearchMode executes the interactive search interface using the native SwiftUI manager.
 func runSearchMode(store *storage.Store) {
 	entries := store.GetEntries()
-	ui.ShowSearchManager(entries)
+	items := store.GetExcludedDomains()
+	ui.ShowDashboard("search", items, entries)
 }
 
 func openURLInChrome(url string) {
