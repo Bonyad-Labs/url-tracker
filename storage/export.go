@@ -12,7 +12,6 @@ import (
 	"golang.org/x/net/html"
 )
 
-// ImportBookmarks reads a Netscape Bookmark HTML file and inserts the entries into the database.
 func (s *Store) ImportBookmarks(filepath string) error {
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -20,7 +19,12 @@ func (s *Store) ImportBookmarks(filepath string) error {
 	}
 	defer file.Close()
 
-	doc, err := html.Parse(file)
+	return s.ImportBookmarksFromReader(file)
+}
+
+// ImportBookmarksFromReader reads from an io.Reader, allowing for tests without files
+func (s *Store) ImportBookmarksFromReader(r io.Reader) error {
+	doc, err := html.Parse(r)
 	if err != nil {
 		return err
 	}
@@ -100,29 +104,19 @@ func (s *Store) ImportBookmarks(filepath string) error {
 	return nil
 }
 
-// ExportBookmarks writes all entries to a Netscape Bookmark HTML file.
 func (s *Store) ExportBookmarks(filepath string) error {
-	entries := s.GetEntries()
 	file, err := os.Create(filepath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	// Write Netscape Bookmark Header
-	header := `<!DOCTYPE NETSCAPE-Bookmark-file-1>
-<!-- This is an automatically generated file.
-     It will be read and overwritten.
-     DO NOT EDIT! -->
-<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
-<TITLE>Bookmarks</TITLE>
-<H1>Bookmarks</H1>
-<DL><p>
-`
-	_, err = io.WriteString(file, header)
-	if err != nil {
-		return err
-	}
+	return s.ExportBookmarksToWriter(file)
+}
+
+// ExportBookmarksToWriter writes to an io.Writer, allowing for tests without files
+func (s *Store) ExportBookmarksToWriter(w io.Writer) error {
+	entries := s.GetEntries()
 
 	// Group entries by Category
 	groups := make(map[string][]Entry)
@@ -134,44 +128,61 @@ func (s *Store) ExportBookmarks(filepath string) error {
 		groups[cat] = append(groups[cat], e)
 	}
 
+	// Write Netscape Bookmark Header
+	header := `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- This is an automatically generated file.
+     It will be read and overwritten.
+     DO NOT EDIT! -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks</H1>
+<DL><p>
+`
+	if _, err := io.WriteString(w, header); err != nil {
+		return err
+	}
+
 	for category, items := range groups {
-		_, err = fmt.Fprintf(file, "    <DT><H3 ADD_DATE=\"%d\" LAST_MODIFIED=\"%d\">%s</H3>\n    <DL><p>\n", time.Now().Unix(), time.Now().Unix(), html.EscapeString(category))
+		_, err := fmt.Fprintf(w, "    <DT><H3 ADD_DATE=\"%d\" LAST_MODIFIED=\"%d\">%s</H3>\n    <DL><p>\n", time.Now().Unix(), time.Now().Unix(), html.EscapeString(category))
 		if err != nil {
 			return err
 		}
 
 		for _, item := range items {
-			_, err = fmt.Fprintf(file, "        <DT><A HREF=\"%s\" ADD_DATE=\"%d\">%s</A>\n", html.EscapeString(item.URL), item.Timestamp, html.EscapeString(item.Title))
+			_, err = fmt.Fprintf(w, "        <DT><A HREF=\"%s\" ADD_DATE=\"%d\">%s</A>\n", html.EscapeString(item.URL), item.Timestamp, html.EscapeString(item.Title))
 			if err != nil {
 				return err
 			}
 		}
 
-		_, err = io.WriteString(file, "    </DL><p>\n")
+		_, err = io.WriteString(w, "    </DL><p>\n")
 		if err != nil {
 			return err
 		}
 	}
 
-	_, err = io.WriteString(file, "</DL><p>\n")
+	_, err := io.WriteString(w, "</DL><p>\n")
 	return err
 }
 
-// ExportNativeJSON writes all entries to a native `.json` backup file.
 func (s *Store) ExportNativeJSON(filepath string) error {
-	entries := s.GetEntries()
 	file, err := os.Create(filepath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	encoder := json.NewEncoder(file)
+	return s.ExportNativeJSONToWriter(file)
+}
+
+// ExportNativeJSONToWriter writes to an io.Writer
+func (s *Store) ExportNativeJSONToWriter(w io.Writer) error {
+	entries := s.GetEntries()
+	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(entries)
 }
 
-// ImportNativeJSON reads a native `.json` backup file and imports the entries.
 func (s *Store) ImportNativeJSON(filepath string) error {
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -179,8 +190,13 @@ func (s *Store) ImportNativeJSON(filepath string) error {
 	}
 	defer file.Close()
 
+	return s.ImportNativeJSONFromReader(file)
+}
+
+// ImportNativeJSONFromReader reads from an io.Reader
+func (s *Store) ImportNativeJSONFromReader(r io.Reader) error {
 	var entries []Entry
-	decoder := json.NewDecoder(file)
+	decoder := json.NewDecoder(r)
 	if err := decoder.Decode(&entries); err != nil {
 		return err
 	}
