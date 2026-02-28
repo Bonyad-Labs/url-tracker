@@ -22,7 +22,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Building native UI components..."
-swiftc ui/manager.swift -o whitelist-manager
+swiftc ui/*.swift ui/Views/*.swift -o whitelist-manager
 
 echo "Creating .app bundle structure..."
 mkdir -p "$MACOS_DIR"

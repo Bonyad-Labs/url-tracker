@@ -2,7 +2,7 @@ package config
 
 import (
 	"encoding/json"
-	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -30,23 +30,26 @@ type ConfigManager struct {
 	path   string
 }
 
-// NewConfigManager initializes a manager, loading the config file from disk or creating default if not found
+// NewConfigManager initializes a manager with the default path
 func NewConfigManager() (*ConfigManager, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
 	}
-
 	configDir := filepath.Join(home, "Library", "Application Support", "chrome-url-tracker")
-	err = os.MkdirAll(configDir, 0755)
+	return NewConfigManagerAtPath(filepath.Join(configDir, "config.json"))
+}
+
+// NewConfigManagerAtPath initializes a manager at a specific path, useful for testing
+func NewConfigManagerAtPath(path string) (*ConfigManager, error) {
+	configDir := filepath.Dir(path)
+	err := os.MkdirAll(configDir, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	configPath := filepath.Join(configDir, "config.json")
-
 	manager := &ConfigManager{
-		path:   configPath,
+		path:   path,
 		config: DefaultConfig(),
 	}
 
@@ -66,18 +69,21 @@ func (m *ConfigManager) load() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	file, err := os.Open(m.path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	bytes, err := io.ReadAll(file)
+	data, err := os.ReadFile(m.path)
 	if err != nil {
 		return err
 	}
 
-	return json.Unmarshal(bytes, &m.config)
+	err = json.Unmarshal(data, &m.config)
+	if err != nil {
+		// Corner case: Corrupted config file.
+		// Log and continue with defaults to avoid blocking app start.
+		log.Printf("Warning: Corrupted config file at %s, using defaults: %v", m.path, err)
+		m.config = DefaultConfig()
+		return nil
+	}
+
+	return nil
 }
 
 // Save writes the current configuration to disk
