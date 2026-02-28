@@ -102,6 +102,7 @@ go test -cover ./storage
 
 - **Premium Web Dashboard**: A high-end browser-based interface for managing and visualizing saved URLs with filters and analytics.
 - **Global Hotkeys**: Custom keyboard shortcuts to trigger search or quick-save.
+- **Smart Category, tag**: Design a backend system that goes through all the tabs and adds recommended tags.
 
 ## License
 
