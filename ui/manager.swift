@@ -38,13 +38,20 @@ enum AppMode: String, Codable {
     case add
     case save
     case dashboard // New unified mode
+    case settings
 }
 
 // MARK: - IPC Command Protocol
+struct ConfigData: Codable {
+    let polling_interval: Int
+    let storage_path: String
+}
+
 struct IPCCommand: Codable {
     let mode: AppMode
     let searchData: [SearchEntry]?
     let whitelistData: [WhitelistItem]?
+    let configData: ConfigData?
     let url: String?
     let title: String?
 }
@@ -87,6 +94,10 @@ class AppViewModel: ObservableObject {
     @Published var saveCategory: String = "Research"
     @Published var saveTags: String = ""
     
+    // Settings Data
+    @Published var pollingInterval: String = "1000"
+    @Published var storagePath: String = ""
+    
     init(items: [WhitelistItem] = [], entries: [SearchEntry] = [], mode: AppMode = .dashboard, url: String = "", title: String = "") {
         self.whitelistItems = items
         self.searchEntries = entries
@@ -110,6 +121,10 @@ class AppViewModel: ObservableObject {
             }
             if let t = cmd.title {
                 self.currentTitle = t
+            }
+            if let config = cmd.configData {
+                self.pollingInterval = String(config.polling_interval)
+                self.storagePath = config.storage_path
             }
             
             // Bring app to front
@@ -967,6 +982,153 @@ struct UnifiedDashboardView: View {
     }
 }
 
+struct SettingsView: View {
+    @ObservedObject var viewModel: AppViewModel
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            // Header
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.blue)
+                    Text("Settings")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                }
+                Text("Manage configuration and data")
+                    .foregroundColor(.secondary)
+            }
+            .padding(.bottom, 8)
+            
+            // Configuration
+            GroupBox("Configuration") {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text("Polling Interval (ms):")
+                            .frame(width: 140, alignment: .leading)
+                        TextField("1000", text: $viewModel.pollingInterval)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+                        Spacer()
+                    }
+                    
+                    HStack {
+                        Text("Storage Path:")
+                            .frame(width: 140, alignment: .leading)
+                        Text(viewModel.storagePath)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    
+                    Button("Save Configuration") {
+                        if let interval = Int(viewModel.pollingInterval) {
+                            print("SAVE_CONFIG|\(interval)")
+                            fflush(stdout)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+            }
+            
+            // Data Management
+            GroupBox("Data Management") {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Import or export your saved URLs to standard Netscape Bookmark HTML format.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    HStack(spacing: 16) {
+                        Menu {
+                            Button("From Browser Bookmarks (.html)") {
+                                importData(type: "HTML")
+                            }
+                            Button("From Native Backup (.json)") {
+                                importData(type: "JSON")
+                            }
+                        } label: {
+                            Label("Import...", systemImage: "square.and.arrow.down")
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        
+                        Menu {
+                            Button("To Browser Bookmarks (.html)") {
+                                exportData(type: "HTML")
+                            }
+                            Button("To Native Backup (.json)") {
+                                exportData(type: "JSON")
+                            }
+                        } label: {
+                            Label("Export...", systemImage: "square.and.arrow.up")
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                    }
+                    
+                    Text("Note: Because standard browser bookmarks do not support Tags, Chrome URL Tracker uses Categories as Bookmark Folders for cross-compatibility. Tags are skipped on export.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary.opacity(0.8))
+                        .padding(.top, 4)
+                }
+                .padding()
+            }
+            
+            Spacer()
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    
+    func importData(type: String) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        
+        if type == "HTML" {
+            panel.allowedContentTypes = [.html]
+        } else {
+            panel.allowedContentTypes = [.json]
+        }
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            if type == "HTML" {
+                print("IMPORT_BOOKMARKS|\(url.path)")
+            } else {
+                print("IMPORT_JSON|\(url.path)")
+            }
+            fflush(stdout)
+        }
+    }
+    
+    func exportData(type: String) {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        
+        if type == "HTML" {
+            panel.nameFieldStringValue = "chrome-url-tracker-bookmarks.html"
+            panel.allowedContentTypes = [.html]
+        } else {
+            panel.nameFieldStringValue = "chrome-url-tracker-backup.json"
+            panel.allowedContentTypes = [.json]
+        }
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            if type == "HTML" {
+                print("EXPORT_BOOKMARKS|\(url.path)")
+            } else {
+                print("EXPORT_JSON|\(url.path)")
+            }
+            fflush(stdout)
+        }
+    }
+}
+
 struct MainContentView: View {
     @StateObject var viewModel: AppViewModel
     
@@ -979,10 +1141,12 @@ struct MainContentView: View {
                 AddView(viewModel: viewModel)
             case .save:
                 SaveView(viewModel: viewModel)
+            case .settings:
+                SettingsView(viewModel: viewModel)
             }
         }
-        .frame(minWidth: (viewModel.mode == .add || viewModel.mode == .save) ? 400 : 800, 
-               minHeight: (viewModel.mode == .add || viewModel.mode == .save) ? 350 : 500)
+        .frame(minWidth: (viewModel.mode == .add || viewModel.mode == .save || viewModel.mode == .settings) ? 400 : 800, 
+               minHeight: (viewModel.mode == .add || viewModel.mode == .save || viewModel.mode == .settings) ? 350 : 500)
     }
 }
 
@@ -997,12 +1161,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, 
-                               width: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : 900, 
-                               height: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : 600),
-            styleMask: (viewModel.mode == .add || viewModel.mode == .save) ? [.titled, .closable, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                               width: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : (viewModel.mode == .settings ? 600 : 900), 
+                               height: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : (viewModel.mode == .settings ? 550 : 600)),
+            styleMask: (viewModel.mode == .add || viewModel.mode == .save || viewModel.mode == .settings) ? [.titled, .closable, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
         
-        if viewModel.mode != .add && viewModel.mode != .save {
+        if viewModel.mode != .add && viewModel.mode != .save && viewModel.mode != .settings {
             window.minSize = NSSize(width: 850, height: 450)
         }
         
@@ -1065,6 +1229,7 @@ for (index, arg) in args.enumerated() {
         case "search": mode = .search
         case "add": mode = .add
         case "save": mode = .save
+        case "settings": mode = .settings
         case "dashboard": mode = .dashboard
         default: mode = .dashboard
         }

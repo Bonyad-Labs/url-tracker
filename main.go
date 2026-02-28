@@ -86,6 +86,9 @@ func main() {
 			entries := store.GetEntries()
 			ui.ShowDashboard("whitelist", items, entries)
 		},
+		OnPreferences: func() {
+			ui.ShowSettings(cfgManager.Get())
+		},
 		OnSearch: func() {
 			go runSearchMode(store)
 		},
@@ -143,6 +146,55 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 	}
 
 	switch action {
+	case "SAVE_CONFIG":
+		// Expect value to be integer (milliseconds)
+		var interval int
+		if _, err := fmt.Sscanf(value, "%d", &interval); err == nil {
+			err = cfgManager.SetInterval(interval)
+			if err != nil {
+				ui.ShowNotification("Error", fmt.Sprintf("Failed to save config: %v", err))
+			} else {
+				ui.ShowNotification("Success", "Settings saved. Restart app to apply polling interval changes.")
+			}
+		}
+	case "IMPORT_BOOKMARKS":
+		if value != "" {
+			err := store.ImportBookmarks(value)
+			if err != nil {
+				ui.ShowNotification("Error", fmt.Sprintf("Failed to import bookmarks: %v", err))
+			} else {
+				ui.ShowNotification("Success", "Bookmarks imported successfully")
+				ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+			}
+		}
+	case "EXPORT_BOOKMARKS":
+		if value != "" {
+			err := store.ExportBookmarks(value)
+			if err != nil {
+				ui.ShowNotification("Error", fmt.Sprintf("Failed to export bookmarks: %v", err))
+			} else {
+				ui.ShowNotification("Success", "Bookmarks exported successfully")
+			}
+		}
+	case "IMPORT_JSON":
+		if value != "" {
+			err := store.ImportNativeJSON(value)
+			if err != nil {
+				ui.ShowNotification("Error", fmt.Sprintf("Failed to import JSON backup: %v", err))
+			} else {
+				ui.ShowNotification("Success", "Native backup imported successfully")
+				ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+			}
+		}
+	case "EXPORT_JSON":
+		if value != "" {
+			err := store.ExportNativeJSON(value)
+			if err != nil {
+				ui.ShowNotification("Error", fmt.Sprintf("Failed to export JSON backup: %v", err))
+			} else {
+				ui.ShowNotification("Success", "Native backup exported successfully")
+			}
+		}
 	case "ADD_WHITELIST":
 		if value != "" {
 			err := store.AddExcludedDomain(value)

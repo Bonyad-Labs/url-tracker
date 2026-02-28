@@ -46,18 +46,28 @@ To run manually for testing:
 ```bash
 ~/Applications/ChromeURLTracker.app/Contents/MacOS/chrome-url-tracker
 ```
-Optional flags:
-- `-interval 1000`: Set polling interval in milliseconds (default 1000ms).
-- `-storage ~/custom-path.db`: Specify a custom SQLite database location (default: `~/Library/Application Support/chrome-url-tracker/chrome-urls.db`).
+(Note: Polling interval and storage paths are now fully managed via the in-app "Preferences..." window, which saves to `~/Library/Application Support/chrome-url-tracker/config.json`).
 
-Launch the interactive native search interface:
+Launch the interactive native search interface directly:
 ```bash
-~/Applications/ChromeURLTracker.app/Contents/MacOS/chrome-url-tracker -search
+~/Applications/ChromeURLTracker.app/Contents/MacOS/chrome-url-tracker --mode search
 ```
 This will open a professional **3-column organized manager** with:
 - **Navigation Sidebar**: Quick access to smart folders, categories, and tags.
 - **Grouped List**: Results organized by date (Today/Yesterday/Earlier) with site icons.
 - **Rich Detail View**: Complete metadata display with interactive Open/Copy actions.
+
+### Data Management (Import & Export)
+
+You can freely import and export URLs from the "Preferences..." menu. Chrome URL Tracker uses two formats for importing and exporting URLs. The standard **Netscape Bookmark HTML format**, meaning it is 100% compatible with Chrome, Safari, and Firefox. And a **JSON format** that is not supported by other browsers.
+
+**  HTML Format:**
+- **Categories map to Folders.** When you export your data, each `Category` you created becomes a Bookmark Folder (e.g., `<H3>`). When importing from Chrome, links inside a folder are assigned that folder's name as their `Category`.
+- **Tags are ignored.** Because standard browser bookmarks do not natively support tags, any tags you have in Chrome URL Tracker are dropped upon export to ensure the HTML file remains strictly compliant. Imported bookmarks will have an empty tags array.
+
+**JSON Format:**
+- **Categories map to Categories.** When you export your data, each `Category` you created becomes a Category (e.g., `"category": "Research"`). When importing from Chrome, links inside a folder are assigned that folder's name as their `Category`.
+- **Tags are preserved.** Because standard browser bookmarks do not natively support tags, any tags you have in Chrome URL Tracker are dropped upon export to ensure the HTML file remains strictly compliant. Imported bookmarks will have an empty tags array.
 
 ### Testing
 

@@ -25,6 +25,7 @@ type ipcCommand struct {
 	Mode          string      `json:"mode"`
 	SearchData    interface{} `json:"searchData,omitempty"`
 	WhitelistData interface{} `json:"whitelistData,omitempty"`
+	ConfigData    interface{} `json:"configData,omitempty"`
 	URL           string      `json:"url,omitempty"`
 	Title         string      `json:"title,omitempty"`
 }
@@ -139,6 +140,15 @@ func ShowDashboard(mode string, whitelistItems interface{}, searchEntries interf
 	}
 	sendIPCCommand(cmd)
 	return "", "", true
+}
+
+// ShowSettings displays the native SwiftUI settings pane.
+func ShowSettings(configData interface{}) {
+	cmd := ipcCommand{
+		Mode:       "settings",
+		ConfigData: configData,
+	}
+	sendIPCCommand(cmd)
 }
 
 // ShowAddWhitelistDialog displays the Add Whitelist dialog in the Unified UI Dashboard.
