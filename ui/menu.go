@@ -2,6 +2,8 @@
 package ui
 
 import (
+	"log"
+
 	"github.com/getlantern/systray"
 )
 
@@ -36,16 +38,22 @@ func StartMenu(handlers MenuHandlers) {
 			for {
 				select {
 				case <-mWhitelist.ClickedCh:
+					log.Printf("Menu: Add Domain to Whitelist clicked")
 					handlers.OnWhitelist()
 				case <-mManage.ClickedCh:
+					log.Printf("Menu: Manage Whitelist clicked")
 					handlers.OnManageWhitelist()
 				case <-mPreferences.ClickedCh:
+					log.Printf("Menu: Preferences clicked")
 					handlers.OnPreferences()
 				case <-mSearch.ClickedCh:
+					log.Printf("Menu: Search Saved URLs clicked")
 					handlers.OnSearch()
 				case <-mPause.ClickedCh:
+					log.Printf("Menu: Toggle Pause clicked")
 					handlers.OnTogglePause(mPause)
 				case <-mQuit.ClickedCh:
+					log.Printf("Menu: Quit clicked")
 					handlers.OnQuit()
 				}
 			}

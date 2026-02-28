@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net/url"
@@ -31,6 +32,9 @@ var (
 
 // main initializes the application, storage, and starts both the menu and monitoring loops.
 func main() {
+	modeFlag := flag.String("mode", "", "Run in specific mode (search, settings)")
+	flag.Parse()
+
 	cfgManager, err := config.NewConfigManager()
 	if err != nil {
 		log.Fatalf("Failed to initialize configuration: %v", err)
@@ -42,6 +46,27 @@ func main() {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
 	defer store.Close()
+
+	// TODO: do we need this?
+	// This is a bit of a hack to get the UI to start in the background
+	// and handle the IPC messages.
+	if *modeFlag == "search" {
+		runSearchMode(store)
+		// Give UI some time to start before exiting Go if it was one-shot,
+		// but since UI is a separate process we can just wait or stay alive.
+		// For search mode, we stay alive to handle IPC.
+		startIPCListener(store, cfgManager)
+		select {} // Block
+	}
+
+	// TODO: do we need this?
+	// This is a bit of a hack to get the UI to start in the background
+	// and handle the IPC messages.
+	if *modeFlag == "settings" {
+		ui.ShowSettings(cfgManager.Get())
+		startIPCListener(store, cfgManager)
+		select {} // Block
+	}
 
 	// Default: Run as Menu Bar App with background monitor
 	fmt.Printf("Starting Chrome URL Tracker (interval: %dms)...\n", cfg.PollingInterval)
@@ -147,6 +172,7 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 
 	switch action {
 	case "SAVE_CONFIG":
+		log.Printf("IPC: Handling SAVE_CONFIG")
 		// Expect value to be integer (milliseconds)
 		var interval int
 		if _, err := fmt.Sscanf(value, "%d", &interval); err == nil {
@@ -158,6 +184,7 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 			}
 		}
 	case "IMPORT_BOOKMARKS":
+		log.Printf("IPC: Handling IMPORT_BOOKMARKS for %s", value)
 		if value != "" {
 			err := store.ImportBookmarks(value)
 			if err != nil {
@@ -168,6 +195,7 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 			}
 		}
 	case "EXPORT_BOOKMARKS":
+		log.Printf("IPC: Handling EXPORT_BOOKMARKS to %s", value)
 		if value != "" {
 			err := store.ExportBookmarks(value)
 			if err != nil {
@@ -177,6 +205,7 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 			}
 		}
 	case "IMPORT_JSON":
+		log.Printf("IPC: Handling IMPORT_JSON from %s", value)
 		if value != "" {
 			err := store.ImportNativeJSON(value)
 			if err != nil {
@@ -187,6 +216,7 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 			}
 		}
 	case "EXPORT_JSON":
+		log.Printf("IPC: Handling EXPORT_JSON to %s", value)
 		if value != "" {
 			err := store.ExportNativeJSON(value)
 			if err != nil {

@@ -25,15 +25,17 @@ func (s *Store) ImportBookmarks(filepath string) error {
 		return err
 	}
 
-	var currentFolder string
-	var parseNode func(*html.Node)
-	parseNode = func(n *html.Node) {
+	var parseNode func(*html.Node, string)
+	parseNode = func(n *html.Node, folder string) {
+		// Netscape Bookmark format: Folders are marked by <H3> tags.
+		// When we find an <H3>, we update the folder name for subsequent nodes in this branch.
 		if n.Type == html.ElementNode && n.Data == "h3" {
 			if n.FirstChild != nil && n.FirstChild.Type == html.TextNode {
-				currentFolder = n.FirstChild.Data
+				folder = n.FirstChild.Data
 			}
 		}
 
+		// When we find an <A> tag, it's a bookmark. We use the most recent folder name found in this scope.
 		if n.Type == html.ElementNode && n.Data == "a" {
 			var href, addDate string
 			for _, a := range n.Attr {
@@ -62,7 +64,7 @@ func (s *Store) ImportBookmarks(filepath string) error {
 					entry := Entry{
 						URL:       href,
 						Title:     title,
-						Category:  currentFolder,
+						Category:  folder,
 						Timestamp: timestamp,
 					}
 
@@ -72,15 +74,29 @@ func (s *Store) ImportBookmarks(filepath string) error {
 			}
 		}
 
+		// Traverse children. We pass the folder name into the recursive call.
+		// We avoid using a shared scoped variable because sibling nodes in Netscape HTML
+		// (like the folder title H3 and the DL containing its contents) need to share
+		// the same folder context without one sibling's metadata leaking or resetting improperly.
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			// Save the previous folder name so siblings don't overwrite it improperly
-			prevFolder := currentFolder
-			parseNode(c)
-			currentFolder = prevFolder
+			// If we just encountered a folder title sibling, we want subsequent siblings
+			// (like the DL list) to inherit it.
+			if n.Type == html.ElementNode && n.Data == "h3" {
+				// Internal nodes of H3 are just text, no need to update folder for them
+				parseNode(c, folder)
+			} else {
+				// For most nodes (like DT), if a child sets a new folder name,
+				// we need to see it here so we can pass it to the NEXT sibling.
+				// This is why we update the local 'folder' variable.
+				if c.Type == html.ElementNode && c.Data == "h3" && c.FirstChild != nil {
+					folder = c.FirstChild.Data
+				}
+				parseNode(c, folder)
+			}
 		}
 	}
 
-	parseNode(doc)
+	parseNode(doc, "")
 	return nil
 }
 

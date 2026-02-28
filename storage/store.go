@@ -218,6 +218,7 @@ func (s *Store) GetEntries() []Entry {
 	var res []Entry
 	for rows.Next() {
 		var e Entry
+		e.Tags = []string{} // Initialize to avoid null in JSON
 		if err := rows.Scan(&e.URL, &e.Title, &e.Description, &e.Category, &e.Timestamp); err == nil {
 			res = append(res, e)
 		}
@@ -236,7 +237,11 @@ func (s *Store) GetEntries() []Entry {
 				}
 			}
 			for i := range res {
-				res[i].Tags = tagMap[res[i].URL]
+				if tags, ok := tagMap[res[i].URL]; ok {
+					res[i].Tags = tags
+				} else {
+					res[i].Tags = []string{}
+				}
 			}
 		}
 	}
@@ -293,6 +298,7 @@ func (s *Store) SearchEntries(query string) []Entry {
 	var res []Entry
 	for rows.Next() {
 		var e Entry
+		e.Tags = []string{} // Initialize to avoid null in JSON
 		if err := rows.Scan(&e.URL, &e.Title, &e.Description, &e.Category, &e.Timestamp); err == nil {
 			res = append(res, e)
 		}
@@ -311,7 +317,11 @@ func (s *Store) SearchEntries(query string) []Entry {
 				}
 			}
 			for i := range res {
-				res[i].Tags = tagMap[res[i].URL]
+				if tags, ok := tagMap[res[i].URL]; ok {
+					res[i].Tags = tags
+				} else {
+					res[i].Tags = []string{}
+				}
 			}
 		}
 	}
