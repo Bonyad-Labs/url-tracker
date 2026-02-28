@@ -204,6 +204,53 @@ func (s *Store) AddEntry(e Entry) error {
 	return tx.Commit()
 }
 
+// UpdateEntry updates an existing URL entry's metadata.
+// It does NOT update the timestamp, as that represents when the URL was originally captured.
+func (s *Store) UpdateEntry(e Entry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("UPDATE entries SET title = ?, description = ?, category = ? WHERE url = ?",
+		e.Title, e.Description, e.Category, e.URL)
+	if err != nil {
+		return err
+	}
+
+	// Update tags: Remove old and insert new
+	_, _ = tx.Exec("DELETE FROM tags WHERE url = ?", e.URL)
+	for _, t := range e.Tags {
+		_, _ = tx.Exec("INSERT INTO tags (url, tag) VALUES (?, ?)", e.URL, t)
+	}
+
+	return tx.Commit()
+}
+
+// RemoveEntry deletes a URL entry and its associated tags from the store.
+func (s *Store) RemoveEntry(url string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Tags are deleted automatically via ON DELETE CASCADE defined in initSchema
+	_, err = tx.Exec("DELETE FROM entries WHERE url = ?", url)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 // GetEntries returns all saved URL entries.
 func (s *Store) GetEntries() []Entry {
 	s.mu.RLock()

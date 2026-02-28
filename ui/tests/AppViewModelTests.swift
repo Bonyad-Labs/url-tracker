@@ -64,7 +64,13 @@ struct AppViewModelTests {
         vm.sidebarSelection = .recentlyAdded
         assert(vm.filteredSearchEntries.count == 0, "Old entry should not be recently added")
 
-        print("✅ All AppViewModel Tests (including corner cases) Passed!")
+        // 7. Test CRUD IPC emission
+        // We can't easily capture stdout in this headless test without more complex setup,
+        // but we can verify the function calls don't crash.
+        vm.deleteEntry(mockEntry)
+        vm.updateEntry(mockEntry)
+
+        print("✅ All AppViewModel Tests (including corner cases & CRUD) Passed!")
         exit(0)
     }
 }

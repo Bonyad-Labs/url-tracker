@@ -85,6 +85,20 @@ class AppViewModel: ObservableObject {
         whitelistItems.filter { $0.type == "url" && (searchText.isEmpty || $0.value.lowercased().contains(searchText.lowercased())) }
     }
     
+    // MARK: - Bookmark Management Logic
+    func deleteEntry(_ entry: SearchEntry) {
+        print("DELETE_ENTRY|\(entry.url)")
+        fflush(stdout)
+    }
+    
+    func updateEntry(_ entry: SearchEntry) {
+        if let data = try? JSONEncoder().encode(entry),
+           let jsonString = String(data: data, encoding: .utf8) {
+            print("UPDATE_ENTRY|\(jsonString)")
+            fflush(stdout)
+        }
+    }
+    
     // MARK: - Search Sidebar Logic
     var allCategories: [String] {
         Array(Set(searchEntries.compactMap { $0.category.isEmpty ? nil : $0.category })).sorted()

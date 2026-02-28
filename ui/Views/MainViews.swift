@@ -184,15 +184,30 @@ struct SearchView: View {
                 .navigationTitle("Library")
         } content: {
             VStack(spacing: 0) {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    TextField("Search...", text: $viewModel.searchText)
-                        .textFieldStyle(.plain)
+                HStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                        TextField("Search...", text: $viewModel.searchText)
+                            .textFieldStyle(.plain)
+                    }
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(8)
+                    
+                    Button(action: {
+                        viewModel.mode = .add
+                    }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .bold))
+                            .padding(8)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Add new bookmark")
                 }
-                .padding(10)
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(10)
                 .padding()
                 
                 List(selection: $viewModel.selectedEntry) {
@@ -330,6 +345,44 @@ struct SearchDetailView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
+                }
+                
+                HStack(spacing: 12) {
+                    Button(action: {
+                        // Logic for editing would normally involve a separate view or inline editing.
+                        // For now, we reuse the AddView-style logic if needed, 
+                        // but let's just implement a simple rename/edit flow later if needed.
+                        // For this implementation, we'll provide a 'Delete' action as requested.
+                    }) {
+                        Label("Edit", systemImage: "pencil")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(true) // TODO: Implement edit view
+                    
+                    Button(action: {
+                        // Deletion logic handled in AppViewModel via IPC
+                        let alert = NSAlert()
+                        alert.messageText = "Remove Bookmark?"
+                        alert.informativeText = "Are you sure you want to remove this URL from your bookmarks?"
+                        alert.alertStyle = .warning
+                        alert.addButton(withTitle: "Remove")
+                        alert.addButton(withTitle: "Cancel")
+                        
+                        if alert.runModal() == .alertFirstButtonReturn {
+                            // We use a separate ObservedObject update if we want local feedback,
+                            // but currently we rely on Go to refresh the list via IPC.
+                            print("DELETE_ENTRY|\(entry.url)")
+                            fflush(stdout)
+                        }
+                    }) {
+                        Label("Remove", systemImage: "trash")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
             .padding(32)

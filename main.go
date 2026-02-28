@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -114,7 +115,7 @@ func main() {
 		OnPreferences: func() {
 			ui.ShowSettings(cfgManager.Get())
 		},
-		OnSearch: func() {
+		OnManageBookmarks: func() { // Renamed from OnSearch
 			go runSearchMode(store)
 		},
 		OnTogglePause: func(item *systray.MenuItem) {
@@ -223,6 +224,38 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 				ui.ShowNotification("Error", fmt.Sprintf("Failed to export JSON backup: %v", err))
 			} else {
 				ui.ShowNotification("Success", "Native backup exported successfully")
+			}
+		}
+	case "DELETE_ENTRY":
+		log.Printf("IPC: Handling DELETE_ENTRY for %s", value)
+		if value != "" {
+			if ui.ShowConfirm("Confirm Removal", fmt.Sprintf("Remove %s from bookmarks?", value)) {
+				err := store.RemoveEntry(value)
+				if err != nil {
+					ui.ShowNotification("Error", fmt.Sprintf("Failed to remove bookmark: %v", err))
+				} else {
+					ui.ShowNotification("Success", fmt.Sprintf("Removed bookmark: %s", value))
+					// Refresh dashboard after deletion
+					ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+				}
+			}
+		}
+	case "UPDATE_ENTRY":
+		log.Printf("IPC: Handling UPDATE_ENTRY for %s", value)
+		if value != "" {
+			var updatedEntry storage.Entry
+			if err := json.Unmarshal([]byte(value), &updatedEntry); err == nil {
+				err := store.UpdateEntry(updatedEntry)
+				if err != nil {
+					ui.ShowNotification("Error", fmt.Sprintf("Failed to update bookmark: %v", err))
+				} else {
+					ui.ShowNotification("Success", fmt.Sprintf("Updated bookmark: %s", updatedEntry.URL))
+					// Refresh dashboard after update
+					ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+				}
+			} else {
+				log.Printf("Error unmarshalling UPDATE_ENTRY payload: %v", err)
+				ui.ShowNotification("Error", fmt.Sprintf("Failed to parse update data: %v", err))
 			}
 		}
 	case "ADD_WHITELIST":

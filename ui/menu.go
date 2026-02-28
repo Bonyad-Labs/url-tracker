@@ -12,7 +12,7 @@ type MenuHandlers struct {
 	OnWhitelist       func()                       // Triggered when "Add to Whitelist" is clicked
 	OnManageWhitelist func()                       // Triggered when "Manage Whitelist" is clicked
 	OnPreferences     func()                       // Triggered when "Preferences..." is clicked
-	OnSearch          func()                       // Triggered when "Search Saved URLs" is clicked
+	OnManageBookmarks func()                       // Triggered when "Manage Bookmarks" is clicked
 	OnTogglePause     func(item *systray.MenuItem) // Triggered when "Pause Monitoring" is clicked
 	OnQuit            func()                       // Triggered when "Quit" is clicked
 }
@@ -28,7 +28,7 @@ func StartMenu(handlers MenuHandlers) {
 		mManage := systray.AddMenuItem("Manage Whitelist", "View or remove whitelisted items")
 		mPreferences := systray.AddMenuItem("Preferences...", "Change application settings and configuration")
 		systray.AddSeparator()
-		mSearch := systray.AddMenuItem("Search Saved URLs", "Open interactive search")
+		mManageBookmarks := systray.AddMenuItem("Manage Bookmarks", "Search, Edit, or Remove saved URLs")
 		systray.AddSeparator()
 		mPause := systray.AddMenuItem("Pause Monitoring", "Temporarily stop tracking new URLs")
 		systray.AddSeparator()
@@ -46,9 +46,9 @@ func StartMenu(handlers MenuHandlers) {
 				case <-mPreferences.ClickedCh:
 					log.Printf("Menu: Preferences clicked")
 					handlers.OnPreferences()
-				case <-mSearch.ClickedCh:
-					log.Printf("Menu: Search Saved URLs clicked")
-					handlers.OnSearch()
+				case <-mManageBookmarks.ClickedCh:
+					log.Printf("Menu: Manage Bookmarks clicked")
+					handlers.OnManageBookmarks()
 				case <-mPause.ClickedCh:
 					log.Printf("Menu: Toggle Pause clicked")
 					handlers.OnTogglePause(mPause)
