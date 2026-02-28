@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,6 +60,7 @@ func ensureUIProcess() error {
 	defer uiMu.Unlock()
 
 	if uiProcess != nil && uiProcess.ProcessState == nil {
+		log.Printf("UI Process already running (PID: %d)", uiProcess.Process.Pid)
 		return nil // Already running
 	}
 
@@ -67,6 +69,7 @@ func ensureUIProcess() error {
 		return fmt.Errorf("whitelist-manager not found")
 	}
 
+	log.Printf("Starting UI process: %s", cmdPath)
 	uiProcess = exec.Command(cmdPath, "--mode", "dashboard")
 	stdin, err := uiProcess.StdinPipe()
 	if err != nil {
@@ -75,6 +78,10 @@ func ensureUIProcess() error {
 	uiStdin = stdin
 
 	stdout, err := uiProcess.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := uiProcess.StderrPipe()
 	if err != nil {
 		return err
 	}
@@ -102,13 +109,27 @@ func ensureUIProcess() error {
 		}
 
 		// Wait for the process to exit cleanly to avoid zombie processes
-		cmd.Wait()
+		err := cmd.Wait()
+		log.Printf("UI Process exited. Error: %v", err)
 
 		uiMu.Lock()
 		if uiProcess == cmd {
 			uiProcess = nil
 		}
 		uiMu.Unlock()
+	}()
+
+	// TODO: Eventually we need to handle the errors from the UI process better
+	// For now, we just log them. but we should probably handle them in a more robust way
+	// Background goroutine to read STDERR from Swift
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			text := strings.TrimSpace(scanner.Text())
+			if text != "" {
+				log.Printf("Swift Stderr: %s", text)
+			}
+		}
 	}()
 
 	return nil
@@ -125,6 +146,7 @@ func sendIPCCommand(cmd ipcCommand) error {
 		return err
 	}
 
+	log.Printf("Sending IPC command: %.100s...", string(data))
 	uiMu.Lock()
 	defer uiMu.Unlock()
 	_, err = uiStdin.Write(append(data, '\n'))
@@ -213,6 +235,7 @@ func ShowSaveDialog(url, title string) (description string, tags []string, categ
 func ConsumeIPCResult() (string, bool) {
 	select {
 	case msg := <-uiResultChan:
+		log.Printf("Received IPC message from Swift: %s", msg)
 		return msg, true
 	default:
 		return "", false

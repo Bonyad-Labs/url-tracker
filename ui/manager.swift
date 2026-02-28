@@ -128,8 +128,14 @@ class AppViewModel: ObservableObject {
             }
             
             // Bring app to front
+            fputs("DEBUG: Activating window for mode: \(self.mode)\n", stderr)
+            NSApp.setActivationPolicy(.regular) // Show in Dock
             NSApp.activate(ignoringOtherApps: true)
+            
             if let window = NSApp.windows.first {
+                if window.isMiniaturized {
+                    window.deminiaturize(nil)
+                }
                 window.makeKeyAndOrderFront(nil)
             }
         }
@@ -1157,6 +1163,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var viewModel: AppViewModel!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        fputs("DEBUG: UI starting in mode: \(self.viewModel.mode)\n", stderr)
         let contentView = MainContentView(viewModel: self.viewModel)
 
         window = NSWindow(
@@ -1187,17 +1194,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     func startStdinListener() {
-        DispatchQueue.global(qos: .background).async {
-            let fileHandle = FileHandle.standardInput
-            // Using lines iterator instead of readDataToEndOfFile to keep it alive
-            while let data = fileHandle.availableData as Data?, data.count > 0 {
-                if let str = String(data: data, encoding: .utf8) {
-                    let lines = str.components(separatedBy: .newlines)
-                    for line in lines where !line.isEmpty {
-                        if let cmdData = line.data(using: .utf8),
-                           let command = try? JSONDecoder().decode(IPCCommand.self, from: cmdData) {
-                            self.viewModel.handleCommand(command)
-                        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            while let line = readLine() {
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty,
+                   let cmdData = trimmed.data(using: .utf8) {
+                    do {
+                        let command = try JSONDecoder().decode(IPCCommand.self, from: cmdData)
+                        self.viewModel.handleCommand(command)
+                    } catch {
+                        // Print error to stderr for debugging
+                        fputs("Swift JSON Error: \(error)\n", stderr)
                     }
                 }
             }
@@ -1206,6 +1213,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
         // App stays alive in background! Just hide the window.
+        fputs("DEBUG: Window closing, reverting activation policy\n", stderr)
+        NSApp.setActivationPolicy(.accessory) // Hide from Dock
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
