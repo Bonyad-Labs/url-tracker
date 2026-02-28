@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"net/url"
@@ -15,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"chrome-url-tracker/config"
 	"chrome-url-tracker/monitor"
 	"chrome-url-tracker/storage"
 	"chrome-url-tracker/ui"
@@ -31,33 +31,29 @@ var (
 
 // main initializes the application, storage, and starts both the menu and monitoring loops.
 func main() {
-	searchFlag := flag.Bool("search", false, "Run in search mode one-shot")
-	intervalFlag := flag.Int("interval", 1000, "Polling interval in milliseconds")
-	storageFlag := flag.String("storage", "", "Path to SQLite database (default: ~/Library/Application Support/chrome-url-tracker/chrome-urls.db)")
-	flag.Parse()
+	cfgManager, err := config.NewConfigManager()
+	if err != nil {
+		log.Fatalf("Failed to initialize configuration: %v", err)
+	}
+	cfg := cfgManager.Get()
 
-	store, err := storage.NewStore(*storageFlag)
+	store, err := storage.NewStore(cfg.StoragePath)
 	if err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
 	defer store.Close()
 
-	if *searchFlag {
-		runSearchMode(store)
-		return
-	}
-
 	// Default: Run as Menu Bar App with background monitor
-	fmt.Printf("Starting Chrome URL Tracker (interval: %dms)...\n", *intervalFlag)
+	fmt.Printf("Starting Chrome URL Tracker (interval: %dms)...\n", cfg.PollingInterval)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Start background IPC background loop
-	startIPCListener(store)
+	startIPCListener(store, cfgManager)
 
 	// Start monitor in background
-	go runMonitorMode(ctx, store, time.Duration(*intervalFlag)*time.Millisecond)
+	go runMonitorMode(ctx, store, cfgManager)
 
 	// Start menu bar (blocks until exit)
 	ui.StartMenu(ui.MenuHandlers{
@@ -122,11 +118,11 @@ func main() {
 }
 
 // startIPCListener runs in the background to handle commands returning from the persistent Swift app.
-func startIPCListener(store *storage.Store) {
+func startIPCListener(store *storage.Store, cfgManager *config.ConfigManager) {
 	go func() {
 		for {
 			if msg, ok := ui.ConsumeIPCResult(); ok {
-				handleIPCMessage(msg, store)
+				handleIPCMessage(msg, store, cfgManager)
 			} else {
 				time.Sleep(100 * time.Millisecond)
 			}
@@ -134,7 +130,7 @@ func startIPCListener(store *storage.Store) {
 	}()
 }
 
-func handleIPCMessage(msg string, store *storage.Store) {
+func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.ConfigManager) {
 	parts := strings.SplitN(msg, "|", 2)
 	if len(parts) == 0 {
 		return
@@ -180,9 +176,10 @@ func handleIPCMessage(msg string, store *storage.Store) {
 
 // runMonitorMode executes the polling loop and coordinates detection logic.
 // It is designed to run as a long-lived goroutine.
-func runMonitorMode(ctx context.Context, store *storage.Store, interval time.Duration) {
+func runMonitorMode(ctx context.Context, store *storage.Store, cfgManager *config.ConfigManager) {
 	seenUrls := make(map[string]bool)
 
+	interval := time.Duration(cfgManager.Get().PollingInterval) * time.Millisecond
 	m := monitor.New(interval, func(tab monitor.TabInfo) bool {
 		if atomic.LoadInt32(&isPaused) == 1 {
 			return false // Silently skip and don't update lastURL
