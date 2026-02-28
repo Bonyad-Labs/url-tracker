@@ -386,12 +386,42 @@ struct SearchSidebarView: View {
 
 struct WhitelistView: View {
     @ObservedObject var viewModel: AppViewModel
+    @State private var newWhitelistURL: String = ""
     
     var body: some View {
         VStack(spacing: 0) {
             header
             
             VStack(spacing: 0) {
+                // Inline Add Form
+                HStack(spacing: 12) {
+                    TextField("Add domain or URL to whitelist...", text: $newWhitelistURL)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(8)
+
+                    Button(action: {
+                        if !newWhitelistURL.isEmpty {
+                            print("ADD_WHITELIST|\(newWhitelistURL)")
+                            fflush(stdout)
+                            newWhitelistURL = ""
+                        }
+                    }) {
+                        Text("Add")
+                            .fontWeight(.bold)       
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.return, modifiers: [])
+                }
+                .padding(.horizontal)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
                 HStack(spacing: 16) {
                     TextField("Search whitelisted items...", text: $viewModel.searchText)
                         .textFieldStyle(.plain)
@@ -691,18 +721,18 @@ struct AddView: View {
                     .font(.system(size: 48))
                     .foregroundColor(.blue)
                     .padding(.bottom, 8)
-                
+
                 Text("Add to Whitelist")
                     .font(.title2)
                     .fontWeight(.bold)
-                
+
                 Text(viewModel.currentTitle.isEmpty ? "New URL Detected" : viewModel.currentTitle)
                     .font(.headline)
                     .lineLimit(1)
                     .foregroundColor(.secondary)
             }
             .padding(.top, 8)
-            
+
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("URL or Domain to Whitelist")

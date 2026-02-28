@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -63,13 +64,26 @@ func main() {
 		OnWhitelist: func() {
 			// Try to get active tab to provide modern context-aware whitelisting
 			tab, err := monitor.GetActiveTab()
-			tabURL := "localhost"
-			tabTitle := "localhost"
-			if err == nil {
-				tabURL = tab.URL
-				tabTitle = tab.Title
+			if err != nil || tab.URL == "" {
+				ui.ShowDialog("Error", "An active browser tab (Chrome/Safari) is required to be whitelisted, please switch to the desired tab and try again.")
+				return
 			}
-			ui.ShowAddWhitelistDialog(tabURL, tabTitle)
+
+			u, err := url.Parse(tab.URL)
+			var domain string
+			if err == nil && u.Host != "" {
+				// Remove www. for cleaner whitelist entry if preferred, but we'll stick to exact
+				domain = u.Host
+			} else {
+				domain = tab.URL // Fallback
+			}
+
+			err = store.AddExcludedDomain(domain)
+			if err != nil {
+				ui.ShowNotification("Error", fmt.Sprintf("Failed to whitelist: %v", err))
+			} else {
+				ui.ShowNotification("Chrome Tracker", "Whitelisted: "+domain)
+			}
 		},
 		OnManageWhitelist: func() {
 			items := store.GetExcludedDomains()

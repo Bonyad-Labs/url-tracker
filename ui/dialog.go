@@ -218,6 +218,13 @@ func ShowNotification(title, message string) {
 	cmd.Run()
 }
 
+// ShowDialog displays a native macOS system notification.
+func ShowDialog(title, message string) {
+	script := fmt.Sprintf(`display dialog %s with title %s`, quoteForAppleScript(message), quoteForAppleScript(title))
+	cmd := exec.Command("osascript", "-e", script)
+	cmd.Run()
+}
+
 // ShowConfirm displays a standard OK/Cancel confirmation dialog.
 func ShowConfirm(title, message string) bool {
 	script := fmt.Sprintf(`display dialog %s with title %s buttons {"Cancel", "OK"} default button "OK"`, quoteForAppleScript(message), quoteForAppleScript(title))
@@ -277,33 +284,6 @@ func ShowEntryDetails(details string) (string, bool) {
 
 	return "", false
 }
-
-// // ShowInputDialog captures a single line of text from the user with custom buttons.
-// // Returns the input text, the button clicked, and a success flag.
-// func ShowInputDialog(title, prompt, defaultAnswer string, buttons []string) (string, string, bool) {
-// 	btnStr := ""
-// 	if len(buttons) > 0 {
-// 		btnStr = "buttons {"
-// 		for i, b := range buttons {
-// 			btnStr += quoteForAppleScript(b)
-// 			if i < len(buttons)-1 {
-// 				btnStr += ", "
-// 			}
-// 		}
-// 		btnStr += "} default button " + quoteForAppleScript(buttons[len(buttons)-1])
-// 	}
-
-// 	script := fmt.Sprintf(`display dialog %s with title %s default answer %s %s`,
-// 		quoteForAppleScript(prompt), quoteForAppleScript(title), quoteForAppleScript(defaultAnswer), btnStr)
-
-// 	output, err := runAppleScript(script)
-// 	if err != nil {
-// 		return "", "", false
-// 	}
-
-// 	text, button := extractTextAndButtonFromDialog(output)
-// 	return text, button, true
-// }
 
 func runAppleScript(script string) (string, error) {
 	cmd := exec.Command("osascript", "-e", script)
