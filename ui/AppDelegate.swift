@@ -11,9 +11,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, 
-                               width: (viewModel.mode == .add || viewModel.mode == .save || viewModel.mode == .edit) ? 450 : (viewModel.mode == .settings ? 600 : 900), 
-                               height: (viewModel.mode == .add || viewModel.mode == .save || viewModel.mode == .edit) ? 450 : (viewModel.mode == .settings ? 550 : 600)),
-            styleMask: (viewModel.mode == .add || viewModel.mode == .save || viewModel.mode == .edit || viewModel.mode == .settings) ? [.titled, .closable, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                               width: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : (viewModel.mode == .settings ? 600 : 900), 
+                               height: (viewModel.mode == .add || viewModel.mode == .save) ? 450 : (viewModel.mode == .settings ? 550 : 600)),
+            styleMask: (viewModel.mode == .add || viewModel.mode == .save || viewModel.mode == .settings) ? [.titled, .closable, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
         
         if viewModel.mode != .add && viewModel.mode != .save && viewModel.mode != .settings {

@@ -99,27 +99,28 @@ class AppViewModel: ObservableObject {
         }
     }
     
-    func prepareEdit(_ entry: SearchEntry) {
-        self.currentURL = entry.url
-        self.currentTitle = entry.title
+    func startInlineEdit(_ entry: SearchEntry) {
         self.saveDescription = entry.description
         self.saveCategory = entry.category
         self.saveTags = entry.tags.joined(separator: ", ")
-        self.mode = .edit
+        self.currentTitle = entry.title
+        self.currentURL = entry.url
     }
     
-    func saveEdit() {
+    func commitInlineEdit(for entryId: String) {
         let tags = saveTags.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        // Find existing timestamp or use current
+        let timestamp = searchEntries.first(where: { $0.url == currentURL })?.timestamp ?? Int64(Date().timeIntervalSince1970)
+        
         let updatedEntry = SearchEntry(
             url: currentURL,
             title: currentTitle,
             description: saveDescription,
             tags: tags,
             category: saveCategory,
-            timestamp: selectedEntry?.timestamp ?? Int64(Date().timeIntervalSince1970)
+            timestamp: timestamp
         )
         updateEntry(updatedEntry)
-        self.mode = .dashboard
     }
     
     // MARK: - Search Sidebar Logic

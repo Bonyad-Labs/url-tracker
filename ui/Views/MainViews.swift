@@ -253,6 +253,7 @@ struct SearchView: View {
 struct SearchDetailView: View {
     @ObservedObject var viewModel: AppViewModel
     let entry: SearchEntry
+    @State private var isEditing = false
     
     var relativeDate: String {
         let date = Date(timeIntervalSince1970: TimeInterval(entry.timestamp))
@@ -265,19 +266,38 @@ struct SearchDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(entry.title.isEmpty ? "No Title" : entry.title)
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                    
-                    Button(action: {
-                        print("OPEN|\(entry.url)")
-                        fflush(stdout)
-                    }) {
-                        Text(entry.url)
-                            .font(.body)
-                            .foregroundColor(.blue)
-                            .underline()
+                    if isEditing {
+                        TextField("Title", text: $viewModel.currentTitle)
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .textFieldStyle(.plain)
+                            .padding(4)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(4)
+                    } else {
+                        Text(entry.title.isEmpty ? "No Title" : entry.title)
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
                     }
-                    .buttonStyle(.plain)
+                    
+                    if isEditing {
+                        TextField("URL", text: $viewModel.currentURL)
+                            .font(.body)
+                            .textFieldStyle(.plain)
+                            .padding(4)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(4)
+                            .foregroundColor(.blue)
+                    } else {
+                        Button(action: {
+                            print("OPEN|\(entry.url)")
+                            fflush(stdout)
+                        }) {
+                            Text(entry.url)
+                                .font(.body)
+                                .foregroundColor(.blue)
+                                .underline()
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 
                 VStack(alignment: .leading, spacing: 16) {
@@ -288,16 +308,25 @@ struct SearchDetailView: View {
                                 .font(.system(size: 10, weight: .black))
                                 .foregroundColor(.secondary)
                             
-                            if !entry.category.isEmpty {
-                                Text(entry.category)
+                            if isEditing {
+                                TextField("Category", text: $viewModel.saveCategory)
                                     .font(.subheadline)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.blue)
+                                    .textFieldStyle(.plain)
+                                    .padding(4)
+                                    .background(Color.white.opacity(0.05))
+                                    .cornerRadius(4)
                             } else {
-                                Text("No category assigned")
-                                    .font(.subheadline)
-                                    .italic()
-                                    .foregroundColor(.secondary.opacity(0.8))
+                                if !entry.category.isEmpty {
+                                    Text(entry.category)
+                                        .font(.subheadline)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.blue)
+                                } else {
+                                    Text("No category assigned")
+                                        .font(.subheadline)
+                                        .italic()
+                                        .foregroundColor(.secondary.opacity(0.8))
+                                }
                             }
                         }
                         
@@ -318,22 +347,31 @@ struct SearchDetailView: View {
                             .font(.system(size: 10, weight: .black))
                             .foregroundColor(.secondary)
                         
-                        if !entry.tags.isEmpty {
-                            FlowLayout(spacing: 4, items: entry.tags) { tag in
-                                AnyView(
-                                    Text(tag)
-                                        .font(.caption)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.secondary.opacity(0.1))
-                                        .cornerRadius(6)
-                                )
-                            }
-                        } else {
-                            Text("No tags added")
+                        if isEditing {
+                            TextField("tag1, tag2...", text: $viewModel.saveTags)
                                 .font(.subheadline)
-                                .italic()
-                                .foregroundColor(.secondary.opacity(0.8))
+                                .textFieldStyle(.plain)
+                                .padding(4)
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(4)
+                        } else {
+                            if !entry.tags.isEmpty {
+                                FlowLayout(spacing: 4, items: entry.tags) { tag in
+                                    AnyView(
+                                        Text(tag)
+                                            .font(.caption)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Color.secondary.opacity(0.1))
+                                            .cornerRadius(6)
+                                    )
+                                }
+                            } else {
+                                Text("No tags added")
+                                    .font(.subheadline)
+                                    .italic()
+                                    .foregroundColor(.secondary.opacity(0.8))
+                            }
                         }
                     }
                 }
@@ -346,69 +384,107 @@ struct SearchDetailView: View {
                         .font(.system(size: 11, weight: .black))
                         .foregroundColor(.secondary)
                     
-                    Text(entry.description.isEmpty ? "No description provided." : entry.description)
-                        .font(.body)
-                        .lineSpacing(4)
+                    if isEditing {
+                        TextEditor(text: $viewModel.saveDescription)
+                            .font(.body)
+                            .frame(minHeight: 100)
+                            .padding(4)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(4)
+                    } else {
+                        Text(entry.description.isEmpty ? "No description provided." : entry.description)
+                            .font(.body)
+                            .lineSpacing(4)
+                    }
                 }
                 
                 Spacer(minLength: 40)
                 
-                HStack(spacing: 12) {
-                    Button(action: {
-                        print("OPEN|\(entry.url)")
-                        fflush(stdout)
-                    }) {
-                        Label("Open in Chrome", systemImage: "safari.fill")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    
-                    Button(action: {
-                        print("COPY|\(entry.url)")
-                        fflush(stdout)
-                    }) {
-                        Label("Copy URL", systemImage: "doc.on.doc.fill")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                }
-                
-                HStack(spacing: 12) {
-                    Button(action: {
-                        viewModel.prepareEdit(entry)
-                    }) {
-                        Label("Edit", systemImage: "pencil")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.bordered)
-                    
-                    Button(action: {
-                        // Deletion logic handled in AppViewModel via IPC
-                        let alert = NSAlert()
-                        alert.messageText = "Remove Bookmark?"
-                        alert.informativeText = "Are you sure you want to remove this URL from your bookmarks?"
-                        alert.alertStyle = .warning
-                        alert.addButton(withTitle: "Remove")
-                        alert.addButton(withTitle: "Cancel")
-                        
-                        if alert.runModal() == .alertFirstButtonReturn {
-                            // We use a separate ObservedObject update if we want local feedback,
-                            // but currently we rely on Go to refresh the list via IPC.
-                            print("DELETE_ENTRY|\(entry.url)")
-                            fflush(stdout)
+                if isEditing {
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            viewModel.commitInlineEdit(for: entry.url)
+                            isEditing = false
+                        }) {
+                            Label("Save Changes", systemImage: "checkmark.circle.fill")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
                         }
-                    }) {
-                        Label("Remove", systemImage: "trash")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .foregroundColor(.red)
+                        .buttonStyle(.plain)
+                        
+                        Button(action: {
+                           isEditing = false
+                        }) {
+                            Text("Cancel")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(10)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.bordered)
+                } else {
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            print("OPEN|\(entry.url)")
+                            fflush(stdout)
+                        }) {
+                            Label("Open in Chrome", systemImage: "safari.fill")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        
+                        Button(action: {
+                            print("COPY|\(entry.url)")
+                            fflush(stdout)
+                        }) {
+                            Label("Copy URL", systemImage: "doc.on.doc.fill")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                    }
+                    
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            viewModel.startInlineEdit(entry)
+                            isEditing = true
+                        }) {
+                            Label("Edit", systemImage: "pencil")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        Button(action: {
+                            // Deletion logic handled in AppViewModel via IPC
+                            let alert = NSAlert()
+                            alert.messageText = "Remove Bookmark?"
+                            alert.informativeText = "Are you sure you want to remove this URL from your bookmarks?"
+                            alert.alertStyle = .warning
+                            alert.addButton(withTitle: "Remove")
+                            alert.addButton(withTitle: "Cancel")
+                            
+                            if alert.runModal() == .alertFirstButtonReturn {
+                                // We use a separate ObservedObject update if we want local feedback,
+                                // but currently we rely on Go to refresh the list via IPC.
+                                print("DELETE_ENTRY|\(entry.url)")
+                                fflush(stdout)
+                            }
+                        }) {
+                            Label("Remove", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .foregroundColor(.red)
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
             }
             .padding(32)
@@ -578,10 +654,10 @@ struct EntryEditorView: View {
             VStack(spacing: 12) {
                 Button(action: {
                     if isEditing {
-                        viewModel.saveEdit()
+                        viewModel.commitInlineEdit(for: viewModel.currentURL)
+                        viewModel.mode = .dashboard
                         if NSApp.windows.first?.styleMask.contains(.titled) == true {
                              // If it was a popup, close it. If it was main window mode, just switching mode is enough.
-                             // But usually edit happens in the dashboard.
                         }
                     } else {
                         let response = [
@@ -838,8 +914,6 @@ struct MainContentView: View {
                 AddView(viewModel: viewModel)
             case .save:
                 EntryEditorView(viewModel: viewModel, isEditing: false)
-            case .edit:
-                EntryEditorView(viewModel: viewModel, isEditing: true)
             case .settings:
                 SettingsView(viewModel: viewModel)
             }

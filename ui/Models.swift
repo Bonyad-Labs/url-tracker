@@ -30,7 +30,6 @@ enum AppMode: String, Codable {
     case search
     case add
     case save
-    case edit
     case dashboard // New unified mode
     case settings
 }
