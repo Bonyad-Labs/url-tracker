@@ -25,11 +25,10 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// isSearching is an atomic flag to prevent multiple search sessions from overlapping.
-// isPaused is an atomic flag to control the monitoring state (0 = active, 1 = paused).
+// isSearching and isPaused are atomic flags to manage application state.
 var (
-	isSearching int32 = 0
-	isPaused    int32 = 0
+	isSearching atomic.Bool
+	isPaused    atomic.Bool
 )
 
 // main initializes the application, storage, and starts both the menu and monitoring loops.
@@ -123,12 +122,12 @@ func main() {
 			go runSearchMode(store)
 		},
 		OnTogglePause: func(item *systray.MenuItem) {
-			// Toggle between 0 (active) and 1 (paused)
-			if atomic.CompareAndSwapInt32(&isPaused, 0, 1) {
+			// Toggle between active and paused states
+			if isPaused.CompareAndSwap(false, true) {
 				item.SetTitle("Resume Monitoring")
 				ui.ShowNotification("Chrome Tracker", "Monitoring Paused")
 			} else {
-				atomic.StoreInt32(&isPaused, 0)
+				isPaused.Store(false)
 				item.SetTitle("Pause Monitoring")
 				ui.ShowNotification("Chrome Tracker", "Monitoring Resumed")
 			}
@@ -164,126 +163,128 @@ func startIPCListener(store *storage.Store, cfgManager *config.ConfigManager) {
 }
 
 func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.ConfigManager) {
-	parts := strings.SplitN(msg, "|", 2)
-	if len(parts) == 0 {
+	action, value, _ := strings.Cut(msg, "|")
+	if action == "" {
 		return
-	}
-
-	action := parts[0]
-	value := ""
-	if len(parts) > 1 {
-		value = parts[1]
 	}
 
 	switch action {
 	case "SAVE_CONFIG":
 		log.Printf("IPC: Handling SAVE_CONFIG")
-		// Expect value to be integer (milliseconds)
 		var interval int
-		if _, err := fmt.Sscanf(value, "%d", &interval); err == nil {
-			err = cfgManager.SetInterval(interval)
-			if err != nil {
-				ui.ShowNotification("Error", fmt.Sprintf("Failed to save config: %v", err))
-			} else {
-				ui.ShowNotification("Success", "Settings saved. Restart app to apply polling interval changes.")
-			}
+		if _, err := fmt.Sscanf(value, "%d", &interval); err != nil {
+			return
 		}
+		if err := cfgManager.SetInterval(interval); err != nil {
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to save config: %v", err))
+		} else {
+			ui.ShowNotification("Success", "Settings saved. Restart app to apply polling interval changes.")
+		}
+
 	case "IMPORT_BOOKMARKS":
 		log.Printf("IPC: Handling IMPORT_BOOKMARKS for %s", value)
-		if value != "" {
-			err := store.ImportBookmarks(value)
-			if err != nil {
-				ui.ShowNotification("Error", fmt.Sprintf("Failed to import bookmarks: %v", err))
-			} else {
-				ui.ShowNotification("Success", "Bookmarks imported successfully")
-				ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
-			}
+		if value == "" {
+			return
 		}
+		if err := store.ImportBookmarks(value); err != nil {
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to import bookmarks: %v", err))
+		} else {
+			ui.ShowNotification("Success", "Bookmarks imported successfully")
+			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+		}
+
 	case "EXPORT_BOOKMARKS":
 		log.Printf("IPC: Handling EXPORT_BOOKMARKS to %s", value)
-		if value != "" {
-			err := store.ExportBookmarks(value)
-			if err != nil {
-				ui.ShowNotification("Error", fmt.Sprintf("Failed to export bookmarks: %v", err))
-			} else {
-				ui.ShowNotification("Success", "Bookmarks exported successfully")
-			}
+		if value == "" {
+			return
 		}
+		if err := store.ExportBookmarks(value); err != nil {
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to export bookmarks: %v", err))
+		} else {
+			ui.ShowNotification("Success", "Bookmarks exported successfully")
+		}
+
 	case "IMPORT_JSON":
 		log.Printf("IPC: Handling IMPORT_JSON from %s", value)
-		if value != "" {
-			err := store.ImportNativeJSON(value)
-			if err != nil {
-				ui.ShowNotification("Error", fmt.Sprintf("Failed to import JSON backup: %v", err))
-			} else {
-				ui.ShowNotification("Success", "Native backup imported successfully")
-				ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
-			}
+		if value == "" {
+			return
 		}
+		if err := store.ImportNativeJSON(value); err != nil {
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to import JSON backup: %v", err))
+		} else {
+			ui.ShowNotification("Success", "Native backup imported successfully")
+			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+		}
+
 	case "EXPORT_JSON":
 		log.Printf("IPC: Handling EXPORT_JSON to %s", value)
-		if value != "" {
-			err := store.ExportNativeJSON(value)
-			if err != nil {
-				ui.ShowNotification("Error", fmt.Sprintf("Failed to export JSON backup: %v", err))
-			} else {
-				ui.ShowNotification("Success", "Native backup exported successfully")
-			}
+		if value == "" {
+			return
 		}
+		if err := store.ExportNativeJSON(value); err != nil {
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to export JSON backup: %v", err))
+		} else {
+			ui.ShowNotification("Success", "Native backup exported successfully")
+		}
+
 	case "DELETE_ENTRY":
 		log.Printf("IPC: Handling DELETE_ENTRY for %s", value)
-		if value != "" {
-			if ui.ShowConfirm("Confirm Removal", fmt.Sprintf("Remove %s from bookmarks?", value)) {
-				err := store.RemoveEntry(value)
-				if err != nil {
-					ui.ShowNotification("Error", fmt.Sprintf("Failed to remove bookmark: %v", err))
-				} else {
-					ui.ShowNotification("Success", fmt.Sprintf("Removed bookmark: %s", value))
-					// Refresh dashboard after deletion
-					ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
-				}
-			}
+		if value == "" {
+			return
 		}
+		if !ui.ShowConfirm("Confirm Removal", fmt.Sprintf("Remove %s from bookmarks?", value)) {
+			return
+		}
+		if err := store.RemoveEntry(value); err != nil {
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to remove bookmark: %v", err))
+		} else {
+			ui.ShowNotification("Success", fmt.Sprintf("Removed bookmark: %s", value))
+			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+		}
+
 	case "UPDATE_ENTRY":
 		log.Printf("IPC: Handling UPDATE_ENTRY for %s", value)
-		if value != "" {
-			var updatedEntry storage.Entry
-			if err := json.Unmarshal([]byte(value), &updatedEntry); err == nil {
-				err := store.UpdateEntry(updatedEntry)
-				if err != nil {
-					ui.ShowNotification("Error", fmt.Sprintf("Failed to update bookmark: %v", err))
-				} else {
-					ui.ShowNotification("Success", fmt.Sprintf("Updated bookmark: %s", updatedEntry.URL))
-					// Refresh dashboard after update
-					ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
-				}
-			} else {
-				log.Printf("Error unmarshalling UPDATE_ENTRY payload: %v", err)
-				ui.ShowNotification("Error", fmt.Sprintf("Failed to parse update data: %v", err))
-			}
+		if value == "" {
+			return
 		}
+		var updatedEntry storage.Entry
+		if err := json.Unmarshal([]byte(value), &updatedEntry); err != nil {
+			log.Printf("Error unmarshalling UPDATE_ENTRY payload: %v", err)
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to parse update data: %v", err))
+			return
+		}
+		if err := store.UpdateEntry(updatedEntry); err != nil {
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to update bookmark: %v", err))
+		} else {
+			ui.ShowNotification("Success", fmt.Sprintf("Updated bookmark: %s", updatedEntry.URL))
+			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+		}
+
 	case "ADD_WHITELIST":
-		if value != "" {
-			err := store.AddExcludedDomain(value)
-			if err != nil {
-				ui.ShowNotification("Error", fmt.Sprintf("Failed to whitelist: %v", err))
-			} else {
-				ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", value))
-				// Refresh the UI to reflect changes
-				ui.ShowDashboard("whitelist", store.GetExcludedDomains(), store.GetEntries())
-			}
+		if value == "" {
+			return
 		}
+		if err := store.AddExcludedDomain(value); err != nil {
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to whitelist: %v", err))
+		} else {
+			ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", value))
+			ui.ShowDashboard("whitelist", store.GetExcludedDomains(), store.GetEntries())
+		}
+
 	case "DELETE_WHITELIST":
-		if ui.ShowConfirm("Confirm Removal", fmt.Sprintf("Remove %s from whitelist?", value)) {
-			err := store.RemoveExcludedDomain(value)
-			if err != nil {
-				ui.ShowNotification("Error", fmt.Sprintf("Failed to remove: %v", err))
-			} else {
-				ui.ShowNotification("Success", fmt.Sprintf("Removed from whitelist: %s", value))
-				// Refresh the UI to reflect changes
-				ui.ShowDashboard("whitelist", store.GetExcludedDomains(), store.GetEntries())
-			}
+		if value == "" {
+			return
 		}
+		if !ui.ShowConfirm("Confirm Removal", fmt.Sprintf("Remove %s from whitelist?", value)) {
+			return
+		}
+		if err := store.RemoveExcludedDomain(value); err != nil {
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to remove: %v", err))
+		} else {
+			ui.ShowNotification("Success", fmt.Sprintf("Removed from whitelist: %s", value))
+			ui.ShowDashboard("whitelist", store.GetExcludedDomains(), store.GetEntries())
+		}
+
 	case "OPEN":
 		openURLInChrome(value)
 		ui.ShowNotification("Success", "Opening in Chrome")
@@ -301,7 +302,7 @@ func runMonitorMode(ctx context.Context, store *storage.Store, cfgManager *confi
 	interval := time.Duration(cfgManager.Get().PollingInterval) * time.Millisecond
 	m := monitor.New(interval, func(tab monitor.TabInfo) bool {
 		log.Printf("Monitor: Callback triggered for %s (Browser: %s)", tab.URL, tab.Browser)
-		if atomic.LoadInt32(&isPaused) == 1 {
+		if isPaused.Load() {
 			log.Printf("Monitor: Skipping %s (monitoring paused)", tab.URL)
 			return false // Silently skip and don't update lastURL
 		}

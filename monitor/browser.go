@@ -37,14 +37,13 @@ func New(interval time.Duration, onChange func(TabInfo) bool) *BrowserMonitor {
 // Start begins the polling loop. It blocks until the context is cancelled.
 // Each poll executes an AppleScript to query the browser's state.
 func (m *BrowserMonitor) Start(ctx context.Context) {
-	ticker := time.NewTicker(m.interval)
-	defer ticker.Stop()
+	ticker := time.Tick(m.interval)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-ticker:
 			info, err := GetActiveTab()
 			if err != nil {
 				// Log errors that aren't just "no supported browser" to help debugging
@@ -139,7 +138,7 @@ end try`
 
 	if err != nil {
 		log.Printf("Execution Error: %v\n", err)
-		return TabInfo{}, fmt.Errorf("osascript error: %v", err)
+		return TabInfo{}, fmt.Errorf("osascript error: %w", err)
 	}
 
 	// 2. Process Result (Stdout)

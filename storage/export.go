@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -42,12 +44,11 @@ func (s *Store) ImportBookmarksFromReader(r io.Reader) error {
 		// When we find an <A> tag, it's a bookmark. We use the most recent folder name found in this scope.
 		if n.Type == html.ElementNode && n.Data == "a" {
 			var href, addDate string
-			for _, a := range n.Attr {
-				if a.Key == "href" {
-					href = a.Val
-				} else if a.Key == "add_date" {
-					addDate = a.Val
-				}
+			if idx := slices.IndexFunc(n.Attr, func(a html.Attribute) bool { return a.Key == "href" }); idx != -1 {
+				href = n.Attr[idx].Val
+			}
+			if idx := slices.IndexFunc(n.Attr, func(a html.Attribute) bool { return a.Key == "add_date" }); idx != -1 {
+				addDate = n.Attr[idx].Val
 			}
 
 			if href != "" {
@@ -142,7 +143,8 @@ func (s *Store) ExportBookmarksToWriter(w io.Writer) error {
 		return err
 	}
 
-	for category, items := range groups {
+	for _, category := range slices.Sorted(maps.Keys(groups)) {
+		items := groups[category]
 		_, err := fmt.Fprintf(w, "    <DT><H3 ADD_DATE=\"%d\" LAST_MODIFIED=\"%d\">%s</H3>\n    <DL><p>\n", time.Now().Unix(), time.Now().Unix(), html.EscapeString(category))
 		if err != nil {
 			return err
@@ -155,8 +157,7 @@ func (s *Store) ExportBookmarksToWriter(w io.Writer) error {
 			}
 		}
 
-		_, err = io.WriteString(w, "    </DL><p>\n")
-		if err != nil {
+		if _, err = io.WriteString(w, "    </DL><p>\n"); err != nil {
 			return err
 		}
 	}
