@@ -3,8 +3,10 @@
 package monitor
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"os/exec"
 	"strings"
 	"time"
@@ -12,8 +14,9 @@ import (
 
 // TabInfo holds the metadata for a single browser tab.
 type TabInfo struct {
-	URL   string
-	Title string
+	URL     string
+	Title   string
+	Browser string // Which browser provided this info
 }
 
 // BrowserMonitor polls the frontmost browser for changes to the active tab.
@@ -44,7 +47,10 @@ func (m *BrowserMonitor) Start(ctx context.Context) {
 		case <-ticker.C:
 			info, err := GetActiveTab()
 			if err != nil {
-				// Silently skip if Chrome is not running or other errors
+				// Log errors that aren't just "no supported browser" to help debugging
+				if !strings.Contains(err.Error(), "no supported browser") {
+					log.Printf("Monitor Error: %v", err)
+				}
 				continue
 			}
 
@@ -61,51 +67,117 @@ func (m *BrowserMonitor) Start(ctx context.Context) {
 func GetActiveTab() (TabInfo, error) {
 	// AppleScript to get active tab's URL and title based on the frontmost app
 	script := `
-		tell application "System Events"
-			set frontApp to name of first application process whose frontmost is true
-		end tell
-		
-		if frontApp is "Google Chrome" then
-			tell application "Google Chrome"
-				if (count of windows) > 0 then
-					tell active tab of front window
-						return URL & "|||" & title
-					end tell
-				end if
-			end tell
-		else if frontApp is "Safari" then
-			tell application "Safari"
-				if (count of windows) > 0 then
-					tell current tab of front window
-						return URL & "|||" & name
-					end tell
-				end if
-			end tell
-		end if
-		return ""`
+		try
+    tell application "System Events"
+        -- Get the name of the application currently in the foreground
+        set frontApp to name of first application process whose frontmost is true
+    end tell
 
-	cmd := exec.Command("osascript", "-e", script)
-	out, err := cmd.Output()
-	if err != nil {
-		return TabInfo{}, err
+    log "DEBUG: The frontmost app is: [" & frontApp & "]"
+
+    -- Check if that application is Safari
+    if frontApp is "Safari" or frontApp is "Safari Technology Preview" then
+		log "DEBUG: Inside Frontmost app is Safari"
+        tell application frontApp
+			log "DEBUG: Inside tell application frontApp"
+			set winCount to (count of windows) as integer
+			log "DEBUG: Confirmed winCount as integer: " & winCount
+            if winCount > 0 then
+				try
+					-- getting the title as below works, but getting the URL doesn't
+					-- so we use the tell application "Safari" block to get both the URL and the title
+					-- which seems to be working fine
+					-- set currentTitle to name of document 1
+					-- set currentURL to URL of document 1
+					tell application "Safari"
+						set currentTitle to name of document 1
+						set currentURL to URL of document 1 -- Literal name fixes the 'URL' error
+					end tell
+					return "Safari" & "|||" & currentURL & "|||" & currentTitle
+				on error err
+					log "DEBUG: Error fetching doc properties: " & err
+				end try
+            end if
+        end tell
+	else if frontApp is "Google Chrome" or frontApp is "Google Chrome Beta" or frontApp is "Google Chrome Canary" then
+		log "DEBUG: Inside Frontmost app is Google Chrome"
+		tell application "Google Chrome"
+			set winCount to (count of windows) as integer
+			log "DEBUG: Confirmed winCount as integer: " & winCount
+			if winCount > 0 then
+				try
+					set currentTitle to name of active tab of front window
+					set currentURL to URL of active tab of front window
+					return "Google Chrome" & "|||" & currentURL & "|||" & currentTitle
+				on error err
+					log "DEBUG: Error fetching doc properties: " & err
+				end try
+			end if
+		end tell
+    end if
+    
+    -- Return empty strings (separated by your delimiter) if not Safari
+    return ""
+on error
+	log "DEBUG: Error getting the frontmost app: " & err
+    return ""
+end try`
+
+	cmd := exec.Command("osascript", "-")
+	cmd.Stdin = strings.NewReader(script)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	// 1. Print Logs (Stderr)
+	if stderr.Len() > 0 {
+		log.Printf("AppleScript Logs:\n%s\n", stderr.String())
 	}
 
-	return parseActiveTab(string(out))
+	if err != nil {
+		log.Printf("Execution Error: %v\n", err)
+		return TabInfo{}, fmt.Errorf("osascript error: %v", err)
+	}
+
+	// 2. Process Result (Stdout)
+	result := strings.TrimSpace(stdout.String())
+	if result == "|||" || result == "" {
+		log.Println("No Safari tab found in foreground.")
+	} else {
+		parts := strings.Split(result, "|||")
+		log.Printf("URL: %s\nTitle: %s\n", parts[0], parts[1])
+	}
+
+	return parseActiveTab(result)
 }
 
 func parseActiveTab(output string) (TabInfo, error) {
 	result := strings.TrimSpace(output)
-	if result == "" {
-		return TabInfo{}, fmt.Errorf("chrome not running or no tabs open")
+	if result == "" || result == "NONE" {
+		return TabInfo{}, fmt.Errorf("no supported browser running or no tabs open")
+	}
+
+	if strings.HasPrefix(result, "ERROR:") {
+		return TabInfo{}, fmt.Errorf("applescript error: %s", strings.TrimPrefix(result, "ERROR:"))
+	}
+
+	if strings.HasPrefix(result, "APP:") {
+		// Log the frontmost app to help debugging if it's not a browser we track
+		appName := strings.TrimPrefix(result, "APP:")
+		return TabInfo{}, fmt.Errorf("no supported browser running (frontmost app: %s)", appName)
 	}
 
 	parts := strings.Split(result, "|||")
-	if len(parts) < 2 {
-		return TabInfo{}, fmt.Errorf("invalid script output")
+	if len(parts) < 3 {
+		return TabInfo{}, fmt.Errorf("invalid script output: %s (expected 3 parts)", result)
 	}
 
 	return TabInfo{
-		URL:   parts[0],
-		Title: parts[1],
+		Browser: parts[0],
+		URL:     parts[1],
+		Title:   parts[2],
 	}, nil
 }

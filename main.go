@@ -296,7 +296,9 @@ func runMonitorMode(ctx context.Context, store *storage.Store, cfgManager *confi
 
 	interval := time.Duration(cfgManager.Get().PollingInterval) * time.Millisecond
 	m := monitor.New(interval, func(tab monitor.TabInfo) bool {
+		log.Printf("Monitor: Callback triggered for %s (Browser: %s)", tab.URL, tab.Browser)
 		if atomic.LoadInt32(&isPaused) == 1 {
+			log.Printf("Monitor: Skipping %s (monitoring paused)", tab.URL)
 			return false // Silently skip and don't update lastURL
 		}
 
@@ -309,12 +311,16 @@ func runMonitorMode(ctx context.Context, store *storage.Store, cfgManager *confi
 		}
 
 		if store.IsExcluded(tab.URL) {
+			log.Printf("Monitor: Skipping %s (whitelisted)", tab.URL)
 			return true
 		}
 
 		if seenUrls[tab.URL] || store.EntryExists(tab.URL) {
+			// Silently skip if already seen or exists to avoid spamming logs
 			return true
 		}
+
+		log.Printf("Monitor: New URL detected in %s: %s", tab.Browser, tab.URL)
 
 		// Show native modern save dialog
 		desc, tags, cat, saved, whitelist := ui.ShowSaveDialog(tab.URL, tab.Title)
@@ -335,13 +341,16 @@ func runMonitorMode(ctx context.Context, store *storage.Store, cfgManager *confi
 			err := store.AddEntry(entry)
 			if err != nil {
 				ui.ShowNotification("Error", fmt.Sprintf("Failed to save URL: %v", err))
+				log.Printf("Error: Failed to save URL %s: %v", tab.URL, err)
 			} else {
 				ui.ShowNotification("Chrome Tracker", "Saved: "+tab.Title)
 				seenUrls[tab.URL] = true
+				log.Printf("Monitor: Successfully saved %s", tab.URL)
 			}
 		} else {
 			// Mark as seen anyway to avoid re-prompting immediately in this session
 			seenUrls[tab.URL] = true
+			log.Printf("Monitor: User skipped saving %s", tab.URL)
 		}
 		return true
 	})
