@@ -6,25 +6,36 @@ import (
 
 func TestParseActiveTab(t *testing.T) {
 	tests := []struct {
-		name      string
-		output    string
-		wantURL   string
-		wantTitle string
-		wantErr   bool
+		name        string
+		output      string
+		wantBrowser string
+		wantURL     string
+		wantTitle   string
+		wantErr     bool
 	}{
 		{
-			name:      "Valid output",
-			output:    "https://google.com|||Google",
-			wantURL:   "https://google.com",
-			wantTitle: "Google",
-			wantErr:   false,
+			name:        "Valid Chrome output",
+			output:      "Chrome|||https://google.com|||Google",
+			wantBrowser: "Chrome",
+			wantURL:     "https://google.com",
+			wantTitle:   "Google",
+			wantErr:     false,
 		},
 		{
-			name:      "URL with delimiter",
-			output:    "https://site.com/search?q=|||Search|||Result",
-			wantURL:   "https://site.com/search?q=",
-			wantTitle: "Search",
-			wantErr:   false,
+			name:        "Valid Safari output",
+			output:      "Safari|||https://apple.com|||Apple",
+			wantBrowser: "Safari",
+			wantURL:     "https://apple.com",
+			wantTitle:   "Apple",
+			wantErr:     false,
+		},
+		{
+			name:        "URL with delimiter",
+			output:      "Chrome|||https://site.com/search?q=|||Search Result",
+			wantBrowser: "Chrome",
+			wantURL:     "https://site.com/search?q=",
+			wantTitle:   "Search Result",
+			wantErr:     false,
 		},
 		{
 			name:    "Empty output",
@@ -37,8 +48,8 @@ func TestParseActiveTab(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "Malformed output",
-			output:  "no delimiter here",
+			name:    "Malformed output (too few parts)",
+			output:  "Chrome|||https://google.com",
 			wantErr: true,
 		},
 	}
@@ -51,6 +62,9 @@ func TestParseActiveTab(t *testing.T) {
 				return
 			}
 			if !tt.wantErr {
+				if got.Browser != tt.wantBrowser {
+					t.Errorf("parseActiveTab() Browser = %v, want %v", got.Browser, tt.wantBrowser)
+				}
 				if got.URL != tt.wantURL {
 					t.Errorf("parseActiveTab() URL = %v, want %v", got.URL, tt.wantURL)
 				}
