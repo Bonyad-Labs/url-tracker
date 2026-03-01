@@ -156,18 +156,59 @@ struct SidebarRow: View {
 
 struct FlowLayout: View {
     let spacing: CGFloat
-    let children: [AnyView]
+    let items: [String]
+    let content: (String) -> AnyView
     
-    init<Views: View>(spacing: CGFloat = 8, @ViewBuilder content: () -> Views) {
-        self.spacing = spacing
-        self.children = [AnyView(content())]
-    }
-    
+    @State private var totalHeight = CGFloat.zero
+
     var body: some View {
-        HStack(spacing: spacing) {
-            ForEach(0..<children.count, id: \.self) { i in
-                children[i]
+        VStack {
+            GeometryReader { geometry in
+                self.generateContent(in: geometry)
             }
+        }
+        .frame(height: totalHeight)
+    }
+
+    private func generateContent(in g: GeometryProxy) -> some View {
+        var width = CGFloat.zero
+        var height = CGFloat.zero
+
+        return ZStack(alignment: .topLeading) {
+            ForEach(items, id: \.self) { item in
+                self.content(item)
+                    .padding([.horizontal, .vertical], spacing)
+                    .alignmentGuide(.leading, computeValue: { d in
+                        if (abs(width - d.width) > g.size.width) {
+                            width = 0
+                            height -= d.height
+                        }
+                        let result = width
+                        if item == self.items.last! {
+                            width = 0 // last item
+                        } else {
+                            width -= d.width
+                        }
+                        return result
+                    })
+                    .alignmentGuide(.top, computeValue: { d in
+                        let result = height
+                        if item == self.items.last! {
+                            height = 0 // last item
+                        }
+                        return result
+                    })
+            }
+        }.background(viewHeightReader($totalHeight))
+    }
+
+    private func viewHeightReader(_ binding: Binding<CGFloat>) -> some View {
+        return GeometryReader { geometry -> Color in
+            let rect = geometry.frame(in: .local)
+            DispatchQueue.main.async {
+                binding.wrappedValue = rect.size.height
+            }
+            return .clear
         }
     }
 }

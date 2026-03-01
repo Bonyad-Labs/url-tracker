@@ -280,40 +280,69 @@ struct SearchDetailView: View {
                     .buttonStyle(.plain)
                 }
                 
-                HStack(spacing: 16) {
-                    if !entry.category.isEmpty {
-                        Label(entry.category, systemImage: "folder.fill")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.blue.opacity(0.1))
-                            .foregroundColor(.blue)
-                            .cornerRadius(6)
+                VStack(alignment: .leading, spacing: 16) {
+                    // Category & Date
+                    HStack(spacing: 24) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("CATEGORY", systemImage: "folder.fill")
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundColor(.secondary)
+                            
+                            if !entry.category.isEmpty {
+                                Text(entry.category)
+                                    .font(.subheadline)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.blue)
+                            } else {
+                                Text("No category assigned")
+                                    .font(.subheadline)
+                                    .italic()
+                                    .foregroundColor(.secondary.opacity(0.8))
+                            }
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("DATE ADDED", systemImage: "calendar")
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundColor(.secondary)
+                            
+                            Text(relativeDate)
+                                .font(.subheadline)
+                                .foregroundColor(.primary)
+                        }
                     }
                     
-                    Text("Added \(relativeDate)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                if !entry.tags.isEmpty {
-                    FlowLayout(spacing: 8) {
-                        ForEach(entry.tags, id: \.self) { tag in
-                            Label(tag, systemImage: "tag")
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(6)
+                    // Tags
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("TAGS", systemImage: "tag.fill")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundColor(.secondary)
+                        
+                        if !entry.tags.isEmpty {
+                            FlowLayout(spacing: 4, items: entry.tags) { tag in
+                                AnyView(
+                                    Text(tag)
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.secondary.opacity(0.1))
+                                        .cornerRadius(6)
+                                )
+                            }
+                        } else {
+                            Text("No tags added")
+                                .font(.subheadline)
+                                .italic()
+                                .foregroundColor(.secondary.opacity(0.8))
                         }
                     }
                 }
+                .padding(.vertical, 8)
                 
                 Divider()
                 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("DESCRIPTION")
+                    Label("DESCRIPTION", systemImage: "text.alignleft")
                         .font(.system(size: 11, weight: .black))
                         .foregroundColor(.secondary)
                     
