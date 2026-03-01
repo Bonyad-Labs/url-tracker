@@ -5,6 +5,7 @@ go 1.25.5
 require (
 	github.com/getlantern/systray v1.2.2
 	golang.org/x/net v0.51.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.46.1
 )
 

@@ -22,6 +22,7 @@ import (
 	"chrome-url-tracker/ui"
 
 	"github.com/getlantern/systray"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // isSearching is an atomic flag to prevent multiple search sessions from overlapping.
@@ -35,6 +36,9 @@ var (
 func main() {
 	modeFlag := flag.String("mode", "", "Run in specific mode (search, settings)")
 	flag.Parse()
+
+	// Initialize log rotation (10MB per file)
+	setupLogger()
 
 	cfgManager, err := config.NewConfigManager()
 	if err != nil {
@@ -373,4 +377,40 @@ func copyToClipboard(text string) {
 	cmd := exec.Command("pbcopy")
 	cmd.Stdin = strings.NewReader(text)
 	cmd.Run()
+}
+
+// setupLogger initializes log rotation using lumberjack.
+// It redirects Go's global log output to ~/Library/Logs/ folders.
+func setupLogger() {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Printf("Warning: Failed to find home directory for logging: %v\n", err)
+		return
+	}
+
+	logDir := homeDir + "/Library/Logs"
+	if _, err := os.Stat(logDir); os.IsNotExist(err) {
+		os.MkdirAll(logDir, 0755)
+	}
+
+	// 10MB log rotation with 3 backups and 28-day retention
+	stdLogger := &lumberjack.Logger{
+		Filename:   logDir + "/chrome-url-tracker.log",
+		MaxSize:    10, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, // days
+		Compress:   true,
+	}
+
+	// Double write to stdout/stderr and logs if not running as LaunchAgent,
+	// but LaunchAgent already redirects stdout/stderr to these files.
+	// To avoid confusion, we'll let the app manage its own rotation
+	// by setting the log output to lumberjack.
+	log.SetOutput(stdLogger)
+
+	// Note: Go's log package doesn't natively split stdout/stderr easily.
+	// Most log.Printf calls go to the same output.
+	// Critical errors should be explicitly logged to the error logger if needed,
+	// but standard LaunchAgent redirection is usually sufficient for simple apps.
+	// However, lumberjack provides the rotation logic we need.
 }
