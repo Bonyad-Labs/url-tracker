@@ -64,7 +64,25 @@ struct AppViewModelTests {
         vm.sidebarSelection = .recentlyAdded
         assert(vm.filteredSearchEntries.count == 0, "Old entry should not be recently added")
 
-        print("✅ All AppViewModel Tests (including corner cases) Passed!")
+        // 7. Test CRUD IPC emission
+        // We can't easily capture stdout in this headless test without more complex setup,
+        // but we can verify the function calls don't crash.
+        vm.deleteEntry(mockEntry)
+        vm.updateEntry(mockEntry)
+
+        // 8. Test Inline Editing Flow
+        vm.startInlineEdit(mockEntry)
+        assert(vm.currentURL == "https://test.com", "URL should match")
+        assert(vm.currentTitle == "Test Title", "Title should match")
+        assert(vm.saveDescription == "Desc", "Description should match")
+        assert(vm.saveCategory == "Cat", "Category should match")
+        assert(vm.saveTags == "tag1", "Tags should match")
+
+        vm.saveDescription = "Updated Desc"
+        vm.commitInlineEdit(for: mockEntry.url)
+        // Note: commitInlineEdit doesn't change mode now, it's handled in the view state
+        
+        print("✅ All AppViewModel Tests (including Inline Editing) Passed!")
         exit(0)
     }
 }

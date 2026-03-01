@@ -85,6 +85,44 @@ class AppViewModel: ObservableObject {
         whitelistItems.filter { $0.type == "url" && (searchText.isEmpty || $0.value.lowercased().contains(searchText.lowercased())) }
     }
     
+    // MARK: - Bookmark Management Logic
+    func deleteEntry(_ entry: SearchEntry) {
+        print("DELETE_ENTRY|\(entry.url)")
+        fflush(stdout)
+    }
+    
+    func updateEntry(_ entry: SearchEntry) {
+        if let data = try? JSONEncoder().encode(entry),
+           let jsonString = String(data: data, encoding: .utf8) {
+            print("UPDATE_ENTRY|\(jsonString)")
+            fflush(stdout)
+        }
+    }
+    
+    func startInlineEdit(_ entry: SearchEntry) {
+        self.saveDescription = entry.description
+        self.saveCategory = entry.category
+        self.saveTags = entry.tags.joined(separator: ", ")
+        self.currentTitle = entry.title
+        self.currentURL = entry.url
+    }
+    
+    func commitInlineEdit(for entryId: String) {
+        let tags = saveTags.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        // Find existing timestamp or use current
+        let timestamp = searchEntries.first(where: { $0.url == currentURL })?.timestamp ?? Int64(Date().timeIntervalSince1970)
+        
+        let updatedEntry = SearchEntry(
+            url: currentURL,
+            title: currentTitle,
+            description: saveDescription,
+            tags: tags,
+            category: saveCategory,
+            timestamp: timestamp
+        )
+        updateEntry(updatedEntry)
+    }
+    
     // MARK: - Search Sidebar Logic
     var allCategories: [String] {
         Array(Set(searchEntries.compactMap { $0.category.isEmpty ? nil : $0.category })).sorted()

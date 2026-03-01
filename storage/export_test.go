@@ -145,3 +145,53 @@ func TestImportCornerCases(t *testing.T) {
 		t.Error("Expected error on invalid JSON import")
 	}
 }
+
+func TestRemoveEntry(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	url := "https://to-delete.com"
+	_ = store.AddEntry(Entry{URL: url, Title: "Delete Me", Tags: []string{"temp"}})
+
+	if !store.EntryExists(url) {
+		t.Fatal("Entry should exist before deletion")
+	}
+
+	err := store.RemoveEntry(url)
+	if err != nil {
+		t.Fatalf("RemoveEntry failed: %v", err)
+	}
+
+	if store.EntryExists(url) {
+		t.Error("Entry should not exist after deletion")
+	}
+}
+
+func TestUpdateEntry(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	url := "https://to-update.com"
+	initial := Entry{URL: url, Title: "Original", Category: "Old", Tags: []string{"tag1"}}
+	_ = store.AddEntry(initial)
+
+	updated := Entry{URL: url, Title: "New Title", Category: "New", Tags: []string{"tag2"}}
+	err := store.UpdateEntry(updated)
+	if err != nil {
+		t.Fatalf("UpdateEntry failed: %v", err)
+	}
+
+	entries := store.GetEntries()
+	found := false
+	for _, e := range entries {
+		if e.URL == url {
+			found = true
+			if e.Title != "New Title" || e.Category != "New" || len(e.Tags) != 1 || e.Tags[0] != "tag2" {
+				t.Errorf("Update metadata mismatch: %+v", e)
+			}
+		}
+	}
+	if !found {
+		t.Error("Updated entry not found in list")
+	}
+}

@@ -184,15 +184,30 @@ struct SearchView: View {
                 .navigationTitle("Library")
         } content: {
             VStack(spacing: 0) {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    TextField("Search...", text: $viewModel.searchText)
-                        .textFieldStyle(.plain)
+                HStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                        TextField("Search...", text: $viewModel.searchText)
+                            .textFieldStyle(.plain)
+                    }
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(8)
+                    
+                    Button(action: {
+                        viewModel.mode = .add
+                    }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .bold))
+                            .padding(8)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Add new bookmark")
                 }
-                .padding(10)
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(10)
                 .padding()
                 
                 List(selection: $viewModel.selectedEntry) {
@@ -218,7 +233,7 @@ struct SearchView: View {
             .navigationTitle("Results")
         } detail: {
             if let entry = viewModel.selectedEntry {
-                SearchDetailView(entry: entry)
+                SearchDetailView(viewModel: viewModel, entry: entry)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "doc.text.magnifyingglass")
@@ -236,7 +251,9 @@ struct SearchView: View {
 }
 
 struct SearchDetailView: View {
+    @ObservedObject var viewModel: AppViewModel
     let entry: SearchEntry
+    @State private var isEditing = false
     
     var relativeDate: String {
         let date = Date(timeIntervalSince1970: TimeInterval(entry.timestamp))
@@ -249,87 +266,225 @@ struct SearchDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(entry.title.isEmpty ? "No Title" : entry.title)
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                    if isEditing {
+                        TextField("Title", text: $viewModel.currentTitle)
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .textFieldStyle(.plain)
+                            .padding(4)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(4)
+                    } else {
+                        Text(entry.title.isEmpty ? "No Title" : entry.title)
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                    }
                     
-                    Button(action: {
-                        print("OPEN|\(entry.url)")
-                        fflush(stdout)
-                    }) {
-                        Text(entry.url)
+                    if isEditing {
+                        TextField("URL", text: $viewModel.currentURL)
                             .font(.body)
+                            .textFieldStyle(.plain)
+                            .padding(4)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(4)
                             .foregroundColor(.blue)
-                            .underline()
+                    } else {
+                        Button(action: {
+                            print("OPEN|\(entry.url)")
+                            fflush(stdout)
+                        }) {
+                            Text(entry.url)
+                                .font(.body)
+                                .foregroundColor(.blue)
+                                .underline()
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
                 
-                HStack(spacing: 16) {
-                    if !entry.category.isEmpty {
-                        Label(entry.category, systemImage: "folder.fill")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.blue.opacity(0.1))
-                            .foregroundColor(.blue)
-                            .cornerRadius(6)
+                VStack(alignment: .leading, spacing: 16) {
+                    // Category & Date
+                    HStack(spacing: 24) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("CATEGORY", systemImage: "folder.fill")
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundColor(.secondary)
+                            
+                            if isEditing {
+                                TextField("Category", text: $viewModel.saveCategory)
+                                    .font(.subheadline)
+                                    .textFieldStyle(.plain)
+                                    .padding(4)
+                                    .background(Color.white.opacity(0.05))
+                                    .cornerRadius(4)
+                            } else {
+                                if !entry.category.isEmpty {
+                                    Text(entry.category)
+                                        .font(.subheadline)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.blue)
+                                } else {
+                                    Text("No category assigned")
+                                        .font(.subheadline)
+                                        .italic()
+                                        .foregroundColor(.secondary.opacity(0.8))
+                                }
+                            }
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("DATE ADDED", systemImage: "calendar")
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundColor(.secondary)
+                            
+                            Text(relativeDate)
+                                .font(.subheadline)
+                                .foregroundColor(.primary)
+                        }
                     }
                     
-                    Text("Added \(relativeDate)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                if !entry.tags.isEmpty {
-                    FlowLayout(spacing: 8) {
-                        ForEach(entry.tags, id: \.self) { tag in
-                            Label(tag, systemImage: "tag")
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(6)
+                    // Tags
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("TAGS", systemImage: "tag.fill")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundColor(.secondary)
+                        
+                        if isEditing {
+                            TextField("tag1, tag2...", text: $viewModel.saveTags)
+                                .font(.subheadline)
+                                .textFieldStyle(.plain)
+                                .padding(4)
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(4)
+                        } else {
+                            if !entry.tags.isEmpty {
+                                FlowLayout(spacing: 4, items: entry.tags) { tag in
+                                    AnyView(
+                                        Text(tag)
+                                            .font(.caption)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Color.secondary.opacity(0.1))
+                                            .cornerRadius(6)
+                                    )
+                                }
+                            } else {
+                                Text("No tags added")
+                                    .font(.subheadline)
+                                    .italic()
+                                    .foregroundColor(.secondary.opacity(0.8))
+                            }
                         }
                     }
                 }
+                .padding(.vertical, 8)
                 
                 Divider()
                 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("DESCRIPTION")
+                    Label("DESCRIPTION", systemImage: "text.alignleft")
                         .font(.system(size: 11, weight: .black))
                         .foregroundColor(.secondary)
                     
-                    Text(entry.description.isEmpty ? "No description provided." : entry.description)
-                        .font(.body)
-                        .lineSpacing(4)
+                    if isEditing {
+                        TextEditor(text: $viewModel.saveDescription)
+                            .font(.body)
+                            .frame(minHeight: 100)
+                            .padding(4)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(4)
+                    } else {
+                        Text(entry.description.isEmpty ? "No description provided." : entry.description)
+                            .font(.body)
+                            .lineSpacing(4)
+                    }
                 }
                 
                 Spacer(minLength: 40)
                 
-                HStack(spacing: 12) {
-                    Button(action: {
-                        print("OPEN|\(entry.url)")
-                        fflush(stdout)
-                    }) {
-                        Label("Open in Chrome", systemImage: "safari.fill")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
+                if isEditing {
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            viewModel.commitInlineEdit(for: entry.url)
+                            isEditing = false
+                        }) {
+                            Label("Save Changes", systemImage: "checkmark.circle.fill")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Button(action: {
+                           isEditing = false
+                        }) {
+                            Text("Cancel")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(10)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                } else {
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            print("OPEN|\(entry.url)")
+                            fflush(stdout)
+                        }) {
+                            Label("Open in Chrome", systemImage: "safari.fill")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        
+                        Button(action: {
+                            print("COPY|\(entry.url)")
+                            fflush(stdout)
+                        }) {
+                            Label("Copy URL", systemImage: "doc.on.doc.fill")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                    }
                     
-                    Button(action: {
-                        print("COPY|\(entry.url)")
-                        fflush(stdout)
-                    }) {
-                        Label("Copy URL", systemImage: "doc.on.doc.fill")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            viewModel.startInlineEdit(entry)
+                            isEditing = true
+                        }) {
+                            Label("Edit", systemImage: "pencil")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        Button(action: {
+                            // Deletion logic handled in AppViewModel via IPC
+                            let alert = NSAlert()
+                            alert.messageText = "Remove Bookmark?"
+                            alert.informativeText = "Are you sure you want to remove this URL from your bookmarks?"
+                            alert.alertStyle = .warning
+                            alert.addButton(withTitle: "Remove")
+                            alert.addButton(withTitle: "Cancel")
+                            
+                            if alert.runModal() == .alertFirstButtonReturn {
+                                // We use a separate ObservedObject update if we want local feedback,
+                                // but currently we rely on Go to refresh the list via IPC.
+                                print("DELETE_ENTRY|\(entry.url)")
+                                fflush(stdout)
+                            }
+                        }) {
+                            Label("Remove", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .foregroundColor(.red)
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
                 }
             }
             .padding(32)
@@ -426,9 +581,10 @@ struct AddView: View {
     }
 }
 
-struct SaveView: View {
+struct EntryEditorView: View {
     @ObservedObject var viewModel: AppViewModel
     @FocusState private var focusedField: Field?
+    var isEditing: Bool = false
     
     enum Field {
         case description, category, tags
@@ -437,11 +593,11 @@ struct SaveView: View {
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 8) {
-                Image(systemName: "square.and.pencil")
+                Image(systemName: isEditing ? "pencil.circle" : "square.and.pencil")
                     .font(.system(size: 40))
                     .foregroundColor(.blue)
                 
-                Text("Save New URL")
+                Text(isEditing ? "Edit Bookmark" : "Save New URL")
                     .font(.title2)
                     .fontWeight(.bold)
                 
@@ -497,22 +653,30 @@ struct SaveView: View {
             
             VStack(spacing: 12) {
                 Button(action: {
-                    let response = [
-                        "action": "save",
-                        "description": viewModel.saveDescription,
-                        "category": viewModel.saveCategory,
-                        "tags": viewModel.saveTags
-                    ]
-                    if let jsonData = try? JSONEncoder().encode(response),
-                       let jsonString = String(data: jsonData, encoding: .utf8) {
-                        print("SAVE_ENTRY|\(jsonString)")
-                        fflush(stdout)
+                    if isEditing {
+                        viewModel.commitInlineEdit(for: viewModel.currentURL)
+                        viewModel.mode = .dashboard
                         if NSApp.windows.first?.styleMask.contains(.titled) == true {
-                            NSApp.windows.first?.close()
+                             // If it was a popup, close it. If it was main window mode, just switching mode is enough.
+                        }
+                    } else {
+                        let response = [
+                            "action": "save",
+                            "description": viewModel.saveDescription,
+                            "category": viewModel.saveCategory,
+                            "tags": viewModel.saveTags
+                        ]
+                        if let jsonData = try? JSONEncoder().encode(response),
+                           let jsonString = String(data: jsonData, encoding: .utf8) {
+                            print("SAVE_ENTRY|\(jsonString)")
+                            fflush(stdout)
+                            if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                                NSApp.windows.first?.close()
+                            }
                         }
                     }
                 }) {
-                    Text("Save Entry")
+                    Text(isEditing ? "Save Changes" : "Save Entry")
                         .fontWeight(.bold)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -524,29 +688,35 @@ struct SaveView: View {
                 .keyboardShortcut(.return, modifiers: [])
                 
                 HStack(spacing: 12) {
-                    Button(action: {
-                        print("ACTION_WHITELIST|")
-                        fflush(stdout)
-                        if NSApp.windows.first?.styleMask.contains(.titled) == true {
-                            NSApp.windows.first?.close()
+                    if !isEditing {
+                        Button(action: {
+                            print("ACTION_WHITELIST|")
+                            fflush(stdout)
+                            if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                                NSApp.windows.first?.close()
+                            }
+                        }) {
+                            Text("Whitelist...")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(8)
                         }
-                    }) {
-                        Text("Whitelist...")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(8)
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     
                     Button(action: {
-                        print("ACTION_SKIP|")
-                        fflush(stdout)
-                        if NSApp.windows.first?.styleMask.contains(.titled) == true {
-                            NSApp.windows.first?.close()
+                        if isEditing {
+                            viewModel.mode = .dashboard
+                        } else {
+                            print("ACTION_SKIP|")
+                            fflush(stdout)
+                            if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                                NSApp.windows.first?.close()
+                            }
                         }
                     }) {
-                        Text("Skip")
+                        Text(isEditing ? "Cancel" : "Skip")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .background(Color.white.opacity(0.05))
@@ -743,7 +913,7 @@ struct MainContentView: View {
             case .add:
                 AddView(viewModel: viewModel)
             case .save:
-                SaveView(viewModel: viewModel)
+                EntryEditorView(viewModel: viewModel, isEditing: false)
             case .settings:
                 SettingsView(viewModel: viewModel)
             }
