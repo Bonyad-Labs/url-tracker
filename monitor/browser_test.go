@@ -52,6 +52,11 @@ func TestParseActiveTab(t *testing.T) {
 			output:  "Chrome|||https://google.com",
 			wantErr: true,
 		},
+		{
+			name:    "Missing value output",
+			output:  "Safari|||missing value|||Apple",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

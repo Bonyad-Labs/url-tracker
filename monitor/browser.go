@@ -90,9 +90,11 @@ func GetActiveTab() (TabInfo, error) {
 					-- set currentURL to URL of document 1
 					tell application "Safari"
 						set currentTitle to name of document 1
-						set currentURL to URL of document 1 -- Literal name fixes the 'URL' error
+						set currentURL to URL of document 1
 					end tell
-					return "Safari" & "|||" & currentURL & "|||" & currentTitle
+					if currentURL is not "missing value" and currentURL is not missing value then
+						return "Safari" & "|||" & currentURL & "|||" & currentTitle
+					end if
 				on error err
 					log "DEBUG: Error fetching doc properties: " & err
 				end try
@@ -107,7 +109,9 @@ func GetActiveTab() (TabInfo, error) {
 				try
 					set currentTitle to name of active tab of front window
 					set currentURL to URL of active tab of front window
-					return "Google Chrome" & "|||" & currentURL & "|||" & currentTitle
+					if currentURL is not "missing value" and currentURL is not missing value then
+						return "Google Chrome" & "|||" & currentURL & "|||" & currentTitle
+					end if
 				on error err
 					log "DEBUG: Error fetching doc properties: " & err
 				end try
@@ -155,8 +159,8 @@ end try`
 
 func parseActiveTab(output string) (TabInfo, error) {
 	result := strings.TrimSpace(output)
-	if result == "" || result == "NONE" {
-		return TabInfo{}, fmt.Errorf("no supported browser running or no tabs open")
+	if result == "" || result == "NONE" || strings.Contains(result, "missing value") {
+		return TabInfo{}, fmt.Errorf("no supported browser running or no tabs open (result: %s)", result)
 	}
 
 	if strings.HasPrefix(result, "ERROR:") {
