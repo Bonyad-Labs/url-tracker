@@ -216,13 +216,37 @@ func (s *Store) UpdateEntry(e Entry) error {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec("UPDATE entries SET title = ?, description = ?, category = ? WHERE url = ?",
+	// 1. Try a standard update where the URL is the identifier
+	res, err := tx.Exec("UPDATE entries SET title = ?, description = ?, category = ? WHERE url = ?",
 		e.Title, e.Description, e.Category, e.URL)
 	if err != nil {
 		return err
 	}
 
-	// Update tags: Remove old and insert new
+	rows, _ := res.RowsAffected()
+
+	// 2. Recovery Logic: If no entry was updated by URL, but the user is trying to fix
+	// a broken "missing value" entry, let's find that "missing value" entry and update it!
+	if rows == 0 && e.URL != "missing value" {
+		// Try to update one of the "missing value" entries
+		res, err = tx.Exec("UPDATE entries SET url = ?, title = ?, description = ?, category = ? WHERE url = 'missing value'",
+			e.URL, e.Title, e.Description, e.Category)
+		if err != nil {
+			return err
+		}
+		rows, _ = res.RowsAffected()
+
+		// If we updated a "missing value" entry, we MUST also clean up any tags associated with it
+		if rows > 0 {
+			_, _ = tx.Exec("DELETE FROM tags WHERE url = 'missing value'")
+		}
+	}
+
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+
+	// 3. Update tags as normal (now for the potentially new/corrected URL)
 	_, _ = tx.Exec("DELETE FROM tags WHERE url = ?", e.URL)
 	for _, t := range e.Tags {
 		_, _ = tx.Exec("INSERT INTO tags (url, tag) VALUES (?, ?)", e.URL, t)

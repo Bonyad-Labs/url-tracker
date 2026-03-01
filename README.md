@@ -105,6 +105,7 @@ go test -cover ./storage
 - **Smart Category, tag**: Design a backend system that goes through all the tabs and adds recommended tags.
 - **Support for other browsers**: Add support for other browsers such as Firefox, Brave, etc.
 - **Make the maximum size of the log file configurable**: the default is 10MB, and the default number of backups is 3. The default maximum age of the logs is 28 days. Make all of these configurable in the preferences window.
+- **Prepopulate the description**: When the user clicks on the save button, the description field should be prepopulated with the title of the tab. can we use AI to summarize the content of the tab and use it as the description?
 
 ## License
 
