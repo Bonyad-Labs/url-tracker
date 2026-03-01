@@ -70,7 +70,20 @@ struct AppViewModelTests {
         vm.deleteEntry(mockEntry)
         vm.updateEntry(mockEntry)
 
-        print("✅ All AppViewModel Tests (including corner cases & CRUD) Passed!")
+        // 8. Test Editing Flow
+        vm.prepareEdit(mockEntry)
+        assert(vm.mode == .edit, "Mode should be edit")
+        assert(vm.currentURL == "https://test.com", "URL should match")
+        assert(vm.currentTitle == "Test Title", "Title should match")
+        assert(vm.saveDescription == "Desc", "Description should match")
+        assert(vm.saveCategory == "Cat", "Category should match")
+        assert(vm.saveTags == "tag1", "Tags should match")
+
+        vm.saveDescription = "Updated Desc"
+        vm.saveEdit()
+        assert(vm.mode == .dashboard, "Mode should return to dashboard after save")
+
+        print("✅ All AppViewModel Tests (including Editing flow) Passed!")
         exit(0)
     }
 }

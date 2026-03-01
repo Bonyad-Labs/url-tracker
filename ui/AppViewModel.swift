@@ -99,6 +99,29 @@ class AppViewModel: ObservableObject {
         }
     }
     
+    func prepareEdit(_ entry: SearchEntry) {
+        self.currentURL = entry.url
+        self.currentTitle = entry.title
+        self.saveDescription = entry.description
+        self.saveCategory = entry.category
+        self.saveTags = entry.tags.joined(separator: ", ")
+        self.mode = .edit
+    }
+    
+    func saveEdit() {
+        let tags = saveTags.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let updatedEntry = SearchEntry(
+            url: currentURL,
+            title: currentTitle,
+            description: saveDescription,
+            tags: tags,
+            category: saveCategory,
+            timestamp: selectedEntry?.timestamp ?? Int64(Date().timeIntervalSince1970)
+        )
+        updateEntry(updatedEntry)
+        self.mode = .dashboard
+    }
+    
     // MARK: - Search Sidebar Logic
     var allCategories: [String] {
         Array(Set(searchEntries.compactMap { $0.category.isEmpty ? nil : $0.category })).sorted()

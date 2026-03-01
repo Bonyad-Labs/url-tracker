@@ -233,7 +233,7 @@ struct SearchView: View {
             .navigationTitle("Results")
         } detail: {
             if let entry = viewModel.selectedEntry {
-                SearchDetailView(entry: entry)
+                SearchDetailView(viewModel: viewModel, entry: entry)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "doc.text.magnifyingglass")
@@ -251,6 +251,7 @@ struct SearchView: View {
 }
 
 struct SearchDetailView: View {
+    @ObservedObject var viewModel: AppViewModel
     let entry: SearchEntry
     
     var relativeDate: String {
@@ -349,17 +350,13 @@ struct SearchDetailView: View {
                 
                 HStack(spacing: 12) {
                     Button(action: {
-                        // Logic for editing would normally involve a separate view or inline editing.
-                        // For now, we reuse the AddView-style logic if needed, 
-                        // but let's just implement a simple rename/edit flow later if needed.
-                        // For this implementation, we'll provide a 'Delete' action as requested.
+                        viewModel.prepareEdit(entry)
                     }) {
                         Label("Edit", systemImage: "pencil")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                     }
                     .buttonStyle(.bordered)
-                    .disabled(true) // TODO: Implement edit view
                     
                     Button(action: {
                         // Deletion logic handled in AppViewModel via IPC
@@ -479,9 +476,10 @@ struct AddView: View {
     }
 }
 
-struct SaveView: View {
+struct EntryEditorView: View {
     @ObservedObject var viewModel: AppViewModel
     @FocusState private var focusedField: Field?
+    var isEditing: Bool = false
     
     enum Field {
         case description, category, tags
@@ -490,11 +488,11 @@ struct SaveView: View {
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 8) {
-                Image(systemName: "square.and.pencil")
+                Image(systemName: isEditing ? "pencil.circle" : "square.and.pencil")
                     .font(.system(size: 40))
                     .foregroundColor(.blue)
                 
-                Text("Save New URL")
+                Text(isEditing ? "Edit Bookmark" : "Save New URL")
                     .font(.title2)
                     .fontWeight(.bold)
                 
@@ -550,22 +548,30 @@ struct SaveView: View {
             
             VStack(spacing: 12) {
                 Button(action: {
-                    let response = [
-                        "action": "save",
-                        "description": viewModel.saveDescription,
-                        "category": viewModel.saveCategory,
-                        "tags": viewModel.saveTags
-                    ]
-                    if let jsonData = try? JSONEncoder().encode(response),
-                       let jsonString = String(data: jsonData, encoding: .utf8) {
-                        print("SAVE_ENTRY|\(jsonString)")
-                        fflush(stdout)
+                    if isEditing {
+                        viewModel.saveEdit()
                         if NSApp.windows.first?.styleMask.contains(.titled) == true {
-                            NSApp.windows.first?.close()
+                             // If it was a popup, close it. If it was main window mode, just switching mode is enough.
+                             // But usually edit happens in the dashboard.
+                        }
+                    } else {
+                        let response = [
+                            "action": "save",
+                            "description": viewModel.saveDescription,
+                            "category": viewModel.saveCategory,
+                            "tags": viewModel.saveTags
+                        ]
+                        if let jsonData = try? JSONEncoder().encode(response),
+                           let jsonString = String(data: jsonData, encoding: .utf8) {
+                            print("SAVE_ENTRY|\(jsonString)")
+                            fflush(stdout)
+                            if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                                NSApp.windows.first?.close()
+                            }
                         }
                     }
                 }) {
-                    Text("Save Entry")
+                    Text(isEditing ? "Save Changes" : "Save Entry")
                         .fontWeight(.bold)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -577,29 +583,35 @@ struct SaveView: View {
                 .keyboardShortcut(.return, modifiers: [])
                 
                 HStack(spacing: 12) {
-                    Button(action: {
-                        print("ACTION_WHITELIST|")
-                        fflush(stdout)
-                        if NSApp.windows.first?.styleMask.contains(.titled) == true {
-                            NSApp.windows.first?.close()
+                    if !isEditing {
+                        Button(action: {
+                            print("ACTION_WHITELIST|")
+                            fflush(stdout)
+                            if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                                NSApp.windows.first?.close()
+                            }
+                        }) {
+                            Text("Whitelist...")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(8)
                         }
-                    }) {
-                        Text("Whitelist...")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(8)
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     
                     Button(action: {
-                        print("ACTION_SKIP|")
-                        fflush(stdout)
-                        if NSApp.windows.first?.styleMask.contains(.titled) == true {
-                            NSApp.windows.first?.close()
+                        if isEditing {
+                            viewModel.mode = .dashboard
+                        } else {
+                            print("ACTION_SKIP|")
+                            fflush(stdout)
+                            if NSApp.windows.first?.styleMask.contains(.titled) == true {
+                                NSApp.windows.first?.close()
+                            }
                         }
                     }) {
-                        Text("Skip")
+                        Text(isEditing ? "Cancel" : "Skip")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .background(Color.white.opacity(0.05))
@@ -796,7 +808,9 @@ struct MainContentView: View {
             case .add:
                 AddView(viewModel: viewModel)
             case .save:
-                SaveView(viewModel: viewModel)
+                EntryEditorView(viewModel: viewModel, isEditing: false)
+            case .edit:
+                EntryEditorView(viewModel: viewModel, isEditing: true)
             case .settings:
                 SettingsView(viewModel: viewModel)
             }
