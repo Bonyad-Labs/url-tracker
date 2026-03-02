@@ -12,6 +12,7 @@ import (
 type Config struct {
 	PollingInterval int    `json:"polling_interval"`
 	StoragePath     string `json:"storage_path"`
+	AutoPrompt      bool   `json:"auto_prompt"`
 }
 
 // DefaultConfig returns the default application configuration
@@ -20,6 +21,7 @@ func DefaultConfig() Config {
 	return Config{
 		PollingInterval: 1000,
 		StoragePath:     filepath.Join(home, "Library", "Application Support", "chrome-url-tracker", "chrome-urls.db"),
+		AutoPrompt:      false, // Default to off for better UX
 	}
 }
 
@@ -114,6 +116,14 @@ func (m *ConfigManager) Get() Config {
 func (m *ConfigManager) SetInterval(interval int) error {
 	m.mu.Lock()
 	m.config.PollingInterval = interval
+	m.mu.Unlock()
+	return m.Save()
+}
+
+// SetAutoPrompt updates the auto-prompt setting safely and persists it
+func (m *ConfigManager) SetAutoPrompt(autoPrompt bool) error {
+	m.mu.Lock()
+	m.config.AutoPrompt = autoPrompt
 	m.mu.Unlock()
 	return m.Save()
 }

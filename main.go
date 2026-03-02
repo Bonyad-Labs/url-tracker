@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,14 +20,12 @@ import (
 	"chrome-url-tracker/storage"
 	"chrome-url-tracker/ui"
 
-	"github.com/getlantern/systray"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// isSearching and isPaused are atomic flags to manage application state.
+// isSearching is an atomic flag to manage application state.
 var (
 	isSearching atomic.Bool
-	isPaused    atomic.Bool
 )
 
 // main initializes the application, storage, and starts both the menu and monitoring loops.
@@ -55,7 +52,7 @@ func main() {
 	// This is a bit of a hack to get the UI to start in the background
 	// and handle the IPC messages.
 	if *modeFlag == "search" {
-		runSearchMode(store)
+		runSearchMode(store, cfgManager)
 		// Give UI some time to start before exiting Go if it was one-shot,
 		// but since UI is a separate process we can just wait or stay alive.
 		// For search mode, we stay alive to handle IPC.
@@ -86,51 +83,19 @@ func main() {
 
 	// Start menu bar (blocks until exit)
 	ui.StartMenu(ui.MenuHandlers{
-		OnWhitelist: func() {
-			// Try to get active tab to provide modern context-aware whitelisting
-			tab, err := monitor.GetActiveTab()
-			if err != nil || tab.URL == "" {
-				ui.ShowDialog("Error", "An active browser tab (Chrome/Safari) is required to be whitelisted, please switch to the desired tab and try again.")
-				return
-			}
-
-			u, err := url.Parse(tab.URL)
-			var domain string
-			if err == nil && u.Host != "" {
-				// Remove www. for cleaner whitelist entry if preferred, but we'll stick to exact
-				domain = u.Host
-			} else {
-				domain = tab.URL // Fallback
-			}
-
-			err = store.AddExcludedDomain(domain)
-			if err != nil {
-				ui.ShowNotification("Error", fmt.Sprintf("Failed to whitelist: %v", err))
-			} else {
-				ui.ShowNotification("Chrome Tracker", "Whitelisted: "+domain)
-			}
-		},
 		OnManageWhitelist: func() {
 			items := store.GetExcludedDomains()
 			entries := store.GetEntries()
-			ui.ShowDashboard("whitelist", items, entries)
+			ui.ShowDashboard("whitelist", items, entries, cfgManager.Get())
 		},
 		OnPreferences: func() {
 			ui.ShowSettings(cfgManager.Get())
 		},
 		OnManageBookmarks: func() { // Renamed from OnSearch
-			go runSearchMode(store)
+			go runSearchMode(store, cfgManager)
 		},
-		OnTogglePause: func(item *systray.MenuItem) {
-			// Toggle between active and paused states
-			if isPaused.CompareAndSwap(false, true) {
-				item.SetTitle("Resume Monitoring")
-				ui.ShowNotification("Chrome Tracker", "Monitoring Paused")
-			} else {
-				isPaused.Store(false)
-				item.SetTitle("Pause Monitoring")
-				ui.ShowNotification("Chrome Tracker", "Monitoring Resumed")
-			}
+		OnSaveTab: func() {
+			triggerManualSave(store)
 		},
 		OnQuit: func() {
 			homeDir, err := os.UserHomeDir()
@@ -171,15 +136,19 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 	switch action {
 	case "SAVE_CONFIG":
 		log.Printf("IPC: Handling SAVE_CONFIG")
-		var interval int
-		if _, err := fmt.Sscanf(value, "%d", &interval); err != nil {
-			return
+		// Format: interval|autoPrompt
+		parts := strings.Split(value, "|")
+		if len(parts) >= 1 {
+			var interval int
+			if _, err := fmt.Sscanf(parts[0], "%d", &interval); err == nil {
+				_ = cfgManager.SetInterval(interval)
+			}
 		}
-		if err := cfgManager.SetInterval(interval); err != nil {
-			ui.ShowNotification("Error", fmt.Sprintf("Failed to save config: %v", err))
-		} else {
-			ui.ShowNotification("Success", "Settings saved. Restart app to apply polling interval changes.")
+		if len(parts) >= 2 {
+			autoPrompt := parts[1] == "true"
+			_ = cfgManager.SetAutoPrompt(autoPrompt)
 		}
+		ui.ShowNotification("Success", "Settings saved. Polling interval changes may require restart.")
 
 	case "IMPORT_BOOKMARKS":
 		log.Printf("IPC: Handling IMPORT_BOOKMARKS for %s", value)
@@ -190,7 +159,7 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 			ui.ShowNotification("Error", fmt.Sprintf("Failed to import bookmarks: %v", err))
 		} else {
 			ui.ShowNotification("Success", "Bookmarks imported successfully")
-			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries(), cfgManager.Get())
 		}
 
 	case "EXPORT_BOOKMARKS":
@@ -213,7 +182,7 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 			ui.ShowNotification("Error", fmt.Sprintf("Failed to import JSON backup: %v", err))
 		} else {
 			ui.ShowNotification("Success", "Native backup imported successfully")
-			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries(), cfgManager.Get())
 		}
 
 	case "EXPORT_JSON":
@@ -239,7 +208,7 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 			ui.ShowNotification("Error", fmt.Sprintf("Failed to remove bookmark: %v", err))
 		} else {
 			ui.ShowNotification("Success", fmt.Sprintf("Removed bookmark: %s", value))
-			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries(), cfgManager.Get())
 		}
 
 	case "UPDATE_ENTRY":
@@ -257,7 +226,7 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 			ui.ShowNotification("Error", fmt.Sprintf("Failed to update bookmark: %v", err))
 		} else {
 			ui.ShowNotification("Success", fmt.Sprintf("Updated bookmark: %s", updatedEntry.URL))
-			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries())
+			ui.ShowDashboard("search", store.GetExcludedDomains(), store.GetEntries(), cfgManager.Get())
 		}
 
 	case "ADD_WHITELIST":
@@ -268,8 +237,12 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 			ui.ShowNotification("Error", fmt.Sprintf("Failed to whitelist: %v", err))
 		} else {
 			ui.ShowNotification("Success", fmt.Sprintf("Whitelisted: %s", value))
-			ui.ShowDashboard("whitelist", store.GetExcludedDomains(), store.GetEntries())
+			ui.ShowDashboard("whitelist", store.GetExcludedDomains(), store.GetEntries(), cfgManager.Get())
 		}
+
+	case "GET_DASHBOARD":
+		log.Printf("IPC: Handling GET_DASHBOARD")
+		ui.ShowDashboard("dashboard", store.GetExcludedDomains(), store.GetEntries(), cfgManager.Get())
 
 	case "DELETE_WHITELIST":
 		if value == "" {
@@ -282,8 +255,12 @@ func handleIPCMessage(msg string, store *storage.Store, cfgManager *config.Confi
 			ui.ShowNotification("Error", fmt.Sprintf("Failed to remove: %v", err))
 		} else {
 			ui.ShowNotification("Success", fmt.Sprintf("Removed from whitelist: %s", value))
-			ui.ShowDashboard("whitelist", store.GetExcludedDomains(), store.GetEntries())
+			ui.ShowDashboard("whitelist", store.GetExcludedDomains(), store.GetEntries(), cfgManager.Get())
 		}
+
+	case "HOTKEY_SAVE":
+		log.Printf("IPC: Handling HOTKEY_SAVE")
+		triggerManualSave(store)
 
 	case "OPEN":
 		openURLInChrome(value)
@@ -302,10 +279,6 @@ func runMonitorMode(ctx context.Context, store *storage.Store, cfgManager *confi
 	interval := time.Duration(cfgManager.Get().PollingInterval) * time.Millisecond
 	m := monitor.New(interval, func(tab monitor.TabInfo) bool {
 		log.Printf("Monitor: Callback triggered for %s (Browser: %s)", tab.URL, tab.Browser)
-		if isPaused.Load() {
-			log.Printf("Monitor: Skipping %s (monitoring paused)", tab.URL)
-			return false // Silently skip and don't update lastURL
-		}
 
 		// Strip URL of query parameters and fragment
 		if idx := strings.Index(tab.URL, "?"); idx != -1 {
@@ -322,6 +295,13 @@ func runMonitorMode(ctx context.Context, store *storage.Store, cfgManager *confi
 
 		if seenUrls[tab.URL] || store.EntryExists(tab.URL) {
 			// Silently skip if already seen or exists to avoid spamming logs
+			return true
+		}
+
+		if !cfgManager.Get().AutoPrompt {
+			// In silent mode, we don't prompt.
+			// We could still silently save if we wanted a "history" feature,
+			// but for now, we just skip to avoid popups.
 			return true
 		}
 
@@ -364,10 +344,39 @@ func runMonitorMode(ctx context.Context, store *storage.Store, cfgManager *confi
 }
 
 // runSearchMode executes the interactive search interface using the native SwiftUI manager.
-func runSearchMode(store *storage.Store) {
+func runSearchMode(store *storage.Store, cfgManager *config.ConfigManager) {
 	entries := store.GetEntries()
 	items := store.GetExcludedDomains()
-	ui.ShowDashboard("search", items, entries)
+	ui.ShowDashboard("search", items, entries, cfgManager.Get())
+}
+
+func triggerManualSave(store *storage.Store) {
+	tab, err := monitor.GetActiveTab()
+	if err != nil || tab.URL == "" {
+		ui.ShowDialog("Error", "No active browser tab found to save.")
+		return
+	}
+
+	desc, tags, cat, saved, whitelist := ui.ShowSaveDialog(tab.URL, tab.Title)
+	if whitelist {
+		ui.ShowAddWhitelistDialog(tab.URL, tab.Title)
+		return
+	}
+
+	if saved {
+		entry := storage.Entry{
+			URL:         tab.URL,
+			Title:       tab.Title,
+			Description: desc,
+			Tags:        tags,
+			Category:    cat,
+		}
+		if err := store.AddEntry(entry); err != nil {
+			ui.ShowNotification("Error", fmt.Sprintf("Failed to save URL: %v", err))
+		} else {
+			ui.ShowNotification("Chrome Tracker", "Saved: "+tab.Title)
+		}
+	}
 }
 
 func openURLInChrome(url string) {

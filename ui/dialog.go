@@ -153,12 +153,13 @@ func sendIPCCommand(cmd ipcCommand) error {
 	return err
 }
 
-// ShowDashboard displays the native SwiftUI dashboard with both data models.
-func ShowDashboard(mode string, whitelistItems interface{}, searchEntries interface{}) (action string, value string, ok bool) {
+// ShowDashboard displays the native SwiftUI dashboard with both data models and config.
+func ShowDashboard(mode string, whitelistItems interface{}, searchEntries interface{}, configData interface{}) (action string, value string, ok bool) {
 	cmd := ipcCommand{
 		Mode:          mode,
 		WhitelistData: whitelistItems,
 		SearchData:    searchEntries,
+		ConfigData:    configData,
 	}
 	sendIPCCommand(cmd)
 	return "", "", true
