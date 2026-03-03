@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Carbon
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var window: NSWindow!
@@ -31,7 +32,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             NSApp.activate(ignoringOtherApps: true)
         }
         
+        setupGlobalHotkey()
         startStdinListener()
+    }
+    
+    func setupGlobalHotkey() {
+        var hotKey: EventHotKeyRef?
+        let hotKeyID = EventHotKeyID(signature: OSType(0x53574654), id: 1) // 'SWFT'
+        
+        let eventHandler: EventHandlerUPP = { (nextHandler, theEvent, userData) -> OSStatus in
+            // When HotKey is pressed, notify Go
+            fputs("HOTKEY_SAVE|\n", stdout)
+            fflush(stdout)
+            return noErr
+        }
+        
+        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        
+        // Use InstallEventHandler directly as the macro is not available in Swift
+        InstallEventHandler(GetApplicationEventTarget(), eventHandler, 1, &eventType, nil, nil)
+        
+        // Register Cmd+Shift+S (S=1, Cmd=cmdKey, Shift=shiftKey)
+        RegisterEventHotKey(UInt32(1), UInt32(cmdKey | shiftKey), hotKeyID, GetApplicationEventTarget(), 0, &hotKey)
     }
     
     func startStdinListener() {

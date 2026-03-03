@@ -798,13 +798,27 @@ struct SettingsView: View {
                             .truncationMode(.middle)
                     }
                     
-                    Button("Save Configuration") {
-                        if let interval = Int(viewModel.pollingInterval) {
-                            print("SAVE_CONFIG|\(interval)")
-                            fflush(stdout)
-                        }
+                    HStack {
+                        Toggle("Auto-prompt for new URLs", isOn: $viewModel.autoPrompt)
+                        Spacer()
                     }
-                    .buttonStyle(.borderedProminent)
+                    
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            saveSettings()
+                        }) {
+                            Text("Save Settings")
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.top, 8)
                 }
                 .padding()
             }
@@ -855,6 +869,13 @@ struct SettingsView: View {
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    
+    func saveSettings() {
+        if let interval = Int(viewModel.pollingInterval) {
+            print("SAVE_CONFIG|\(interval)|\(viewModel.autoPrompt)")
+            fflush(stdout)
+        }
     }
     
     func importData(type: String) {

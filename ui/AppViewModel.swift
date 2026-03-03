@@ -24,6 +24,7 @@ class AppViewModel: ObservableObject {
     // Settings Data
     @Published var pollingInterval: String = "1000"
     @Published var storagePath: String = ""
+    @Published var autoPrompt: Bool = false
     
     init(items: [WhitelistItem] = [], entries: [SearchEntry] = [], mode: AppMode = .dashboard, url: String = "", title: String = "") {
         self.whitelistItems = items
@@ -52,6 +53,7 @@ class AppViewModel: ObservableObject {
             if let config = cmd.configData {
                 self.pollingInterval = String(config.polling_interval)
                 self.storagePath = config.storage_path
+                self.autoPrompt = config.auto_prompt
             }
             
             // Bring app to front

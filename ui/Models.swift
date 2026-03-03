@@ -37,6 +37,7 @@ enum AppMode: String, Codable {
 struct ConfigData: Codable {
     let polling_interval: Int
     let storage_path: String
+    let auto_prompt: Bool
 }
 
 struct IPCCommand: Codable {
